@@ -229,7 +229,7 @@ export default function App() {
           </span>
         </div>
         <div style={{ fontSize:12, opacity:0.7, letterSpacing:1.5, textTransform:"uppercase", position:"relative" }}>
-          Sanjana & Partner
+          Sanjana & Akhil
         </div>
         <div style={{ display:"flex", gap:8, marginTop:14, position:"relative" }}>
           {[{ label:"Engagement", date:ENGAGEMENT_DATE, emoji:"💍" }, { label:"Wedding", date:WEDDING_DATE, emoji:"🎊" }].map((ev,i) => (
@@ -319,25 +319,25 @@ function DashboardTab({ budget, totalSpent, remaining, totalSharedCost, settleme
       }}>
         <div style={{ fontSize:11, textTransform:"uppercase", letterSpacing:1.5, opacity:0.8, marginBottom:6 }}>Settlement</div>
         <div style={{ fontFamily:"'Cormorant Garamond', serif", fontSize:26, fontWeight:700, marginBottom:4 }}>
-          {Math.abs(settlement)<1 ? "All Settled! ✓" : settlement>0 ? `Groom owes ${fmtFull(settlement)}` : `Bride owes ${fmtFull(Math.abs(settlement))}`}
+          {Math.abs(settlement)<1 ? "All Settled! ✓" : settlement>0 ? `Akhil owes ${fmtFull(settlement)}` : `Sanjana owes ${fmtFull(Math.abs(settlement))}`}
         </div>
         <div style={{ fontSize:12, opacity:0.75, lineHeight:1.4, marginTop:8 }}>
-          Bride paid {fmtL(bridePaidShared)} · Groom paid {fmtL(groomPaidShared)} toward shared costs
+          Sanjana paid {fmtL(bridePaidShared)} · Akhil paid {fmtL(groomPaidShared)} toward shared costs
         </div>
         <div style={{ display:"flex", gap:8, marginTop:12 }}>
-          <MiniStat label="Bride's share" value={fmtL(brideShareOfShared)} />
-          <MiniStat label="Groom's share" value={fmtL(brideShareOfShared)} />
+          <MiniStat label="Sanjana's share" value={fmtL(brideShareOfShared)} />
+          <MiniStat label="Akhil's share" value={fmtL(brideShareOfShared)} />
         </div>
       </div>
 
       {/* Personal */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
         <div className="card" style={{ marginBottom:0 }}>
-          <div style={{ fontSize:11, color:"#9B6B66", textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>✿ Bride Personal</div>
+          <div style={{ fontSize:11, color:"#9B6B66", textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>✿ Sanjana Personal</div>
           <div style={{ fontSize:20, fontWeight:700, color:"#9B6B66", fontFamily:"'Cormorant Garamond', serif" }}>{fmtL(bridePersonalTotal)}</div>
         </div>
         <div className="card" style={{ marginBottom:0 }}>
-          <div style={{ fontSize:11, color:"#6B7F63", textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>❖ Groom Personal</div>
+          <div style={{ fontSize:11, color:"#6B7F63", textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>❖ Akhil Personal</div>
           <div style={{ fontSize:20, fontWeight:700, color:"#6B7F63", fontFamily:"'Cormorant Garamond', serif" }}>{fmtL(groomPersonalTotal)}</div>
         </div>
       </div>
@@ -396,7 +396,7 @@ function ExpensesTab({ expenses, onAdd, onEdit, onDelete }) {
   return (
     <div style={{ padding:16 }} className="fade-up">
       <div style={{ display:"flex", gap:6, marginBottom:14, overflowX:"auto", paddingBottom:4 }}>
-        {[{id:"all",label:"All"},{id:"shared",label:"Shared"},{id:"Bride",label:"✿ Bride"},{id:"Groom",label:"❖ Groom"}].map(f => (
+        {[{id:"all",label:"All"},{id:"shared",label:"Shared"},{id:"Bride",label:"✿ Sanjana"},{id:"Groom",label:"❖ Akhil"}].map(f => (
           <button key={f.id} onClick={() => setFilter(f.id)} style={{
             background:filter===f.id?"#6B5B50":"white", color:filter===f.id?"#FFF8F0":"#6B5B50",
             border:"1px solid #D5C8BC", borderRadius:20, padding:"6px 16px",
@@ -425,7 +425,7 @@ function ExpensesTab({ expenses, onAdd, onEdit, onDelete }) {
             <div style={{ flex:1 }}>
               <div style={{ fontSize:15, fontWeight:600, color:"#4A3F35" }}>{e.title}</div>
               <div style={{ fontSize:12, color:"#8C7B6F", marginTop:3, lineHeight:1.5 }}>
-                {e.date} · {e.category} · {e.type==="shared"?`Shared · Paid by ${e.paidBy}`:`${e.owner}'s personal`}
+                {e.date} · {e.category} · {e.type==="shared"?`Shared · Paid by ${e.paidBy==="Bride"?"Sanjana":e.paidBy==="Groom"?"Akhil":"Both"}`:`${e.owner==="Bride"?"Sanjana":"Akhil"}'s personal`}
                 {e.paymentMode?` · ${e.paymentMode}`:""}
               </div>
               {e.notes && <div style={{ fontSize:11, color:"#A89888", marginTop:4, fontStyle:"italic" }}>{e.notes}</div>}
@@ -526,7 +526,7 @@ function ExpenseModal({ categories, initial, onSave, onClose }) {
                   background:owner===w?(w==="Bride"?"#FCE4EC":"#E8F5E9"):"white",
                   fontSize:13, fontWeight:600, cursor:"pointer",
                   color:owner===w?(w==="Bride"?"#9B6B66":"#6B7F63"):"#8C7B6F",
-                }}>{w==="Bride"?"✿ Bride":"❖ Groom"}</button>
+                }}>{w==="Bride"?"✿ Sanjana":"❖ Akhil"}</button>
               ))}
             </div>
           </div>
@@ -559,7 +559,7 @@ function ExpenseModal({ categories, initial, onSave, onClose }) {
                       background:paidBy===w?"#FFF0E6":"white",
                       fontSize:12, fontWeight:600, cursor:"pointer",
                       color:paidBy===w?"#C17950":"#8C7B6F",
-                    }}>{w}</button>
+                    }}>{w==="Bride"?"Sanjana":w==="Groom"?"Akhil":"Both"}</button>
                   ))}
                 </div>
               </div>
