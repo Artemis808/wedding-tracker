@@ -71,11 +71,13 @@ export default function App() {
   }, []);
 
   const showToast = (m) => { setToast(m); setTimeout(() => setToast(null), 2500); };
+  // Strip undefined values — Firebase rejects them
+  const clean = (obj) => { const o = {}; Object.keys(obj).forEach(k => { if (obj[k] !== undefined && obj[k] !== null && obj[k] !== "") o[k] = obj[k]; }); return o; };
   const saveBudget = v => set(ref(db, "settings/budget"), v).catch(() => showToast("\u26a0\ufe0f Save failed"));
   const saveCats = c => set(ref(db, "settings/categories"), c).catch(() => showToast("\u26a0\ufe0f Save failed"));
-  const addExp = d => { set(push(ref(db, "expenses")), { ...d, createdAt: new Date().toISOString() }).then(() => showToast("Added \u2713")).catch(() => showToast("\u26a0\ufe0f Failed")); };
-  const updExp = (id, d) => { update(ref(db, `expenses/${id}`), d).then(() => showToast("Updated \u2713")).catch(() => showToast("\u26a0\ufe0f Failed")); };
-  const delExp = id => { remove(ref(db, `expenses/${id}`)).then(() => showToast("Deleted \u2713")).catch(() => showToast("\u26a0\ufe0f Failed")); };
+  const addExp = d => set(push(ref(db, "expenses")), { ...clean(d), createdAt: new Date().toISOString() }).then(() => showToast("Added \u2713")).catch(err => { console.error("Save failed:", err); showToast("\u26a0\ufe0f Failed: " + (err.message || "unknown")); });
+  const updExp = (id, d) => update(ref(db, `expenses/${id}`), clean(d)).then(() => showToast("Updated \u2713")).catch(err => { console.error("Update failed:", err); showToast("\u26a0\ufe0f Update failed"); });
+  const delExp = id => remove(ref(db, `expenses/${id}`)).then(() => showToast("Deleted \u2713")).catch(() => showToast("\u26a0\ufe0f Delete failed"));
 
   const expList = Object.entries(expenses).map(([id, e]) => ({ id, ...e }));
   const shared = expList.filter(e => e.type === "shared");
@@ -295,6 +297,8 @@ function ExpModal({ cats, init, onSave, onClose }) {
       return;
     }
     setSubmitting(true);
+    // Safety net — if parent doesn't unmount us in 5s, reset so user can retry
+    setTimeout(() => setSubmitting(false), 5000);
     onSave({
       type,
       owner: type === "personal" ? owner : undefined,
@@ -338,7 +342,7 @@ function ExpModal({ cats, init, onSave, onClose }) {
             <div id="field-tc">
               <label style={lbl}>Total Cost of Item ({"\u20b9"})</label>
               <input type="number" value={tc} onChange={e=>{setTC(e.target.value); if(errors.tc) setErrors({...errors, tc:null})}} placeholder="Full cost, e.g. 105000" style={errors.tc ? inpErr : inpBase} />
-              <div style={{ fontSize:11,color:"#8C7B6F",marginTop:3 }}>Full price \u2014 50% share auto-calculated. Leave blank to use Amount Paid.</div>
+              <div style={{ fontSize:11,color:"#8C7B6F",marginTop:3 }}>Full price — 50% share auto-calculated. Leave blank to use Amount Paid.</div>
               {errMsg(errors.tc)}
             </div>
             <div>
