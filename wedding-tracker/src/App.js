@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { db } from "./firebase";
 import { ref, onValue, set, push, remove, update, serverTimestamp } from "firebase/database";
 
@@ -58,8 +58,7 @@ const css = `
    ═══════════════════════════════════════════════════════════════════════ */
 export default function App() {
   const [loading, setLoading] = useState(true);
-  const [connStatus, setConnStatus] = useState("connecting"); // "connecting" | "connected" | "offline" | "error"
-  const [errorMsg, setErrorMsg] = useState(null);
+  const [connStatus, setConnStatus] = useState("connecting");
   const [tab, setTab] = useState("dashboard");
   const [budget, setBudget] = useState(1200000);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
@@ -68,6 +67,7 @@ export default function App() {
   const [editId, setEditId] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState(null);
+  const dataLoaded = useRef(false);
 
   // ── Firebase Realtime Listeners ────────────────────────────────────
   useEffect(() => {
@@ -85,52 +85,47 @@ export default function App() {
       // 2. Budget listener
       const unsub1 = onValue(ref(db, "settings/budget"),
         (snap) => { if (snap.exists()) setBudget(snap.val()); },
-        (err) => { setConnStatus("error"); setErrorMsg(err.message); setLoading(false); }
+        (err) => { console.warn("Budget listener error:", err.message); }
       );
       unsubs.push(unsub1);
 
       // 3. Categories listener
       const unsub2 = onValue(ref(db, "settings/categories"),
         (snap) => { if (snap.exists()) setCategories(snap.val()); },
-        (err) => { setConnStatus("error"); setErrorMsg(err.message); }
+        (err) => { console.warn("Categories listener error:", err.message); }
       );
       unsubs.push(unsub2);
 
-      // 4. Expenses listener
+      // 4. Expenses listener — this is the main one that controls loading state
       const unsub3 = onValue(ref(db, "expenses"),
         (snap) => {
           setExpenses(snap.exists() ? snap.val() : {});
+          dataLoaded.current = true;
           setLoading(false);
         },
-        (err) => { setConnStatus("error"); setErrorMsg(err.message); setLoading(false); }
+        (err) => { console.warn("Expenses listener error:", err.message); setLoading(false); }
       );
       unsubs.push(unsub3);
 
-      // 5. One-time initialization check — write defaults only if database is completely empty
-      // Using a small delay so all listeners can fetch existing data first
+      // 5. One-time initialization — write defaults if database is empty
       initTimer = setTimeout(() => {
         const initRef = ref(db, "settings/initialized");
         onValue(initRef, (snap) => {
           if (!snap.exists()) {
-            // Use update (atomic) rather than set (overwrite) to prevent race conditions
             update(ref(db, "settings"), {
               budget: 1200000,
               categories: DEFAULT_CATEGORIES,
               initialized: true,
               createdAt: serverTimestamp(),
-            }).catch(err => console.warn("Init write failed (probably already initialized):", err));
+            }).catch(err => console.warn("Init write failed:", err));
           }
         }, { onlyOnce: true });
-      }, 800); // Wait 800ms to ensure other listeners have populated first
+      }, 800);
 
-      // Safety: if Firebase doesn't respond in 8 seconds, stop loading
+      // Safety: if nothing loads in 15 seconds, just show the app with defaults
       const safetyTimer = setTimeout(() => {
         setLoading(false);
-        if (connStatus === "connecting") {
-          setConnStatus("error");
-          setErrorMsg("Firebase connection timed out. Check your firebase.js config.");
-        }
-      }, 8000);
+      }, 15000);
 
       return () => {
         unsubs.forEach(u => u());
@@ -138,8 +133,7 @@ export default function App() {
         clearTimeout(safetyTimer);
       };
     } catch (err) {
-      setConnStatus("error");
-      setErrorMsg(err.message);
+      console.error("Firebase setup error:", err);
       setLoading(false);
     }
   }, []);
@@ -199,34 +193,12 @@ export default function App() {
     catSpending[cat] = { shared: shC, brideP: bpC, groomP: gpC, total: shC + bpC + gpC, budget: categories[cat] };
   });
 
-  // ── Loading / Error Screen ─────────────────────────────────────────
+  // ── Loading Screen ─────────────────────────────────────────────────
   if (loading) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#FFF8F0", padding:20 }}>
       <div style={{ textAlign:"center" }}>
         <div style={{ fontSize:48, marginBottom:12 }}>💍</div>
         <div style={{ fontSize:16, color:"#8C7B6F", letterSpacing:2, fontFamily:"'Cormorant Garamond', serif" }}>Connecting...</div>
-      </div>
-    </div>
-  );
-
-  if (connStatus === "error") return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh", background:"#FFF8F0", padding:24 }}>
-      <div style={{ textAlign:"center", maxWidth:380 }}>
-        <div style={{ fontSize:48, marginBottom:12 }}>⚠️</div>
-        <div style={{ fontSize:18, fontWeight:700, color:"#8B3A4A", marginBottom:8, fontFamily:"'Cormorant Garamond', serif" }}>
-          Can't connect to database
-        </div>
-        <div style={{ fontSize:13, color:"#8C7B6F", marginBottom:16, lineHeight:1.5 }}>
-          Please check that your Firebase config in <code style={{background:"#F0E8DD", padding:"2px 6px", borderRadius:4}}>src/firebase.js</code> is correct, and that your Realtime Database rules allow read/write.
-        </div>
-        {errorMsg && (
-          <div style={{ fontSize:11, color:"#A89888", background:"#F0E8DD", padding:10, borderRadius:8, marginBottom:16, wordBreak:"break-word" }}>
-            {errorMsg}
-          </div>
-        )}
-        <button onClick={() => window.location.reload()} className="btn-primary" style={{ padding:"10px 24px", fontSize:14 }}>
-          Retry
-        </button>
       </div>
     </div>
   );
