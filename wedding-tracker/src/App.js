@@ -65,9 +65,23 @@ const fmtL = (n) => {
   return s + "₹" + a.toLocaleString("en-IN");
 };
 const fmtFull = (n) => "₹" + Math.abs(n).toLocaleString("en-IN");
-const fmtDate = (d) => { if (!d) return ""; try { return new Date(d).toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" }); } catch { return d; } };
-const fmtDateShort = (d) => { if (!d) return ""; try { return new Date(d).toLocaleDateString("en-IN", { day:"numeric", month:"short" }); } catch { return d; } };
-const daysUntil = (d) => { if (!d) return null; const t = new Date(); t.setHours(0,0,0,0); const target = new Date(d); target.setHours(0,0,0,0); return Math.round((target - t) / 86400000); };
+const parseLocalDate = (d) => {
+  if (!d) return null;
+  if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    const [y, m, day] = d.split("-").map(Number);
+    return new Date(y, m - 1, day);
+  }
+  return new Date(d);
+};
+const fmtDate = (d) => { try { const p = parseLocalDate(d); return p ? p.toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" }) : ""; } catch { return d || ""; } };
+const fmtDateShort = (d) => { try { const p = parseLocalDate(d); return p ? p.toLocaleDateString("en-IN", { day:"numeric", month:"short" }) : ""; } catch { return d || ""; } };
+const daysUntil = (d) => {
+  const target = parseLocalDate(d);
+  if (!target) return null;
+  target.setHours(0,0,0,0);
+  const t = new Date(); t.setHours(0,0,0,0);
+  return Math.round((target - t) / 86400000);
+};
 const countdown = (target) => {
   const t = new Date(); t.setHours(0,0,0,0);
   if (t >= target) return target === ENGAGEMENT_DATE ? "Done! 💍" : "Today! 🎊";
@@ -219,7 +233,7 @@ export default function App() {
       title: pay.title || pay.vendor,
       category: pay.category,
       vendor: pay.vendor,
-      paidBy: pay.shared ? pay.whoPays : pay.whoPays,
+      paidBy: pay.whoPays,
       totalCost: pay.amount,
       amountPaid: pay.amount,
       paymentMode: "",
@@ -227,8 +241,13 @@ export default function App() {
       photos: [],
       notes: pay.notes ? `From scheduled payment: ${pay.notes}` : "Converted from scheduled payment",
     };
-    addExp(expData);
-    delPay(pay.id);
+    // First add the expense, only mark payment as paid if successful
+    set(push(ref(db, "expenses")), { ...clean(expData), createdAt: new Date().toISOString() })
+      .then(() => {
+        update(ref(db, `payments/${pay.id}`), { status: "Paid", paidOn: new Date().toISOString().split("T")[0] }).catch(() => {});
+        showToast("Marked as paid ✓");
+      })
+      .catch(err => { console.error(err); showToast("⚠️ Failed: " + (err.message || "unknown")); });
   };
 
   const expList = Object.entries(expenses).map(([id, e]) => ({ id, ...e }));
@@ -239,10 +258,14 @@ export default function App() {
   const tsc = shared.reduce((s, e) => s + (e.totalCost || 0), 0);
   const bp = shared.reduce((s, e) => e.paidBy === "Bride" ? s + (e.amountPaid || 0) : e.paidBy === "Both" ? s + (e.amountPaid || 0) / 2 : s, 0);
   const gp = shared.reduce((s, e) => e.paidBy === "Groom" ? s + (e.amountPaid || 0) : e.paidBy === "Both" ? s + (e.amountPaid || 0) / 2 : s, 0);
+  // Personal: track both total committed cost and amount actually paid
+  const bptCost = brideP.reduce((s, e) => s + (e.totalCost || e.amountPaid || 0), 0);
+  const gptCost = groomP.reduce((s, e) => s + (e.totalCost || e.amountPaid || 0), 0);
   const bpt = brideP.reduce((s, e) => s + (e.amountPaid || 0), 0);
   const gpt = groomP.reduce((s, e) => s + (e.amountPaid || 0), 0);
-  const ts = bp + gp + bpt + gpt;
-  const rem = budget - tsc - bpt - gpt;
+  const ts = bp + gp + bpt + gpt;           // total actually paid
+  const totalCommitted = tsc + bptCost + gptCost;  // total committed (for budget tracking)
+  const rem = budget - totalCommitted;
   const sett = bp / 2 - gp / 2;
 
   const catS = {};
@@ -274,11 +297,11 @@ export default function App() {
 
       {/* Tab Content */}
       <div style={{ padding:"0 0 84px" }}>
-        {tab==="dashboard" && <DashTab budget={budget} ts={ts} rem={rem} tsc={tsc} sett={sett} bp={bp} gp={gp} bsh={tsc/2} bpt={bpt} gpt={gpt} catS={catS} payList={payList} />}
+        {tab==="dashboard" && <DashTab budget={budget} ts={ts} rem={rem} tsc={tsc} sett={sett} bp={bp} gp={gp} bsh={tsc/2} bpt={bpt} gpt={gpt} bptCost={bptCost} gptCost={gptCost} brideP={brideP} groomP={groomP} catS={catS} payList={payList} />}
         {tab==="expenses" && <ExpTab exps={expList} onAdd={()=>{setEditExp(null);setShowExpForm(true);}} onEdit={e=>{setEditExp(e);setShowExpForm(true);}} onDel={id=>{if(window.confirm("Delete this expense?")) delExp(id);}} />}
         {tab==="vendors" && <VendorsTab expList={expList} payList={payList} />}
         {tab==="upcoming" && <UpcomingTab payList={payList} onAdd={()=>{setEditPay(null);setShowPayForm(true);}} onEdit={p=>{setEditPay(p);setShowPayForm(true);}} onDel={id=>{if(window.confirm("Delete this scheduled payment?")) delPay(id);}} onMarkPaid={markPayAsPaid} />}
-        {tab==="insights" && <InsTab data={{expList, payList, shared, brideP, groomP, tsc, bp, gp, bpt, gpt, ts, rem, sett, budget, catS}} onExport={doExport} />}
+        {tab==="insights" && <InsTab data={{expList, payList, shared, brideP, groomP, tsc, bp, gp, bpt, gpt, bptCost, gptCost, ts, rem, sett, budget, catS}} onExport={doExport} />}
       </div>
 
       {/* Modals */}
@@ -342,9 +365,17 @@ function Header({ conn, onSettings }) {
 /* ═══════════════════════════════════════════════════════════════════════
    DASHBOARD TAB
    ═══════════════════════════════════════════════════════════════════════ */
-function DashTab({ budget, ts, rem, tsc, sett, bp, gp, bsh, bpt, gpt, catS, payList }) {
+function DashTab({ budget, ts, rem, tsc, sett, bp, gp, bsh, bpt, gpt, bptCost, gptCost, brideP, groomP, catS, payList }) {
   const pct = budget > 0 ? Math.min((ts / budget) * 100, 100) : 0;
   const upcoming = payList.filter(p => p.status !== "Paid").sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate)).slice(0, 3);
+  const bDue = (bptCost || 0) - (bpt || 0);
+  const gDue = (gptCost || 0) - (gpt || 0);
+  const [personalExpanded, setPersonalExpanded] = useState(false);
+  const totalPersonal = bpt + gpt;
+  const sPct = totalPersonal > 0 ? (bpt / totalPersonal) * 100 : 50;
+  const aPct = totalPersonal > 0 ? (gpt / totalPersonal) * 100 : 50;
+  const recentBride = [...brideP].sort((a,b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt)).slice(0, 5);
+  const recentGroom = [...groomP].sort((a,b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt)).slice(0, 5);
 
   return (
     <div style={{ padding:16 }} className="fade-up">
@@ -406,16 +437,109 @@ function DashTab({ budget, ts, rem, tsc, sett, bp, gp, bsh, bpt, gpt, catS, payL
         </div>
       )}
 
-      {/* Personal */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
-        <div className="card" style={{ marginBottom:0 }}>
-          <div style={{ fontSize:11, color:C.rose, textTransform:"uppercase", letterSpacing:1.2, marginBottom:6, fontWeight:600 }}>✿ Sanjana</div>
-          <div className="serif" style={{ fontSize:20, fontWeight:600, color:C.ink }}>{fmtL(bpt)}</div>
-        </div>
-        <div className="card" style={{ marginBottom:0 }}>
-          <div style={{ fontSize:11, color:C.sage, textTransform:"uppercase", letterSpacing:1.2, marginBottom:6, fontWeight:600 }}>❖ Akhil</div>
-          <div className="serif" style={{ fontSize:20, fontWeight:600, color:C.ink }}>{fmtL(gpt)}</div>
-        </div>
+      {/* Personal Expenses — expandable */}
+      <div className="card" style={{ padding:0, overflow:"hidden", marginBottom:14 }}>
+        <button onClick={() => setPersonalExpanded(!personalExpanded)} style={{ width:"100%", background:"none", border:"none", padding:18, textAlign:"left", cursor:"pointer" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+            <div>
+              <div style={{ fontSize:11, color:C.inkSoft, textTransform:"uppercase", letterSpacing:1.2, fontWeight:600 }}>Personal Expenses</div>
+              <div className="serif" style={{ fontSize:22, fontWeight:600, color:C.ink, marginTop:2 }}>{fmtL(totalPersonal)}</div>
+            </div>
+            <div style={{ fontSize:18, color:C.inkFaint }}>{personalExpanded ? "▴" : "▾"}</div>
+          </div>
+
+          {/* Visual split bar */}
+          {totalPersonal > 0 ? (
+            <>
+              <div style={{ display:"flex", height:10, borderRadius:5, overflow:"hidden", background:C.borderLight, marginBottom:8 }}>
+                <div style={{ width:`${sPct}%`, background:`linear-gradient(90deg, ${C.roseSoft}, ${C.rose})`, transition:"width 0.5s" }} />
+                <div style={{ width:`${aPct}%`, background:`linear-gradient(90deg, ${C.sage}, ${C.sageSoft})`, transition:"width 0.5s" }} />
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ width:8, height:8, borderRadius:"50%", background:C.rose }} />
+                  <span style={{ color:C.inkSoft, fontWeight:600 }}>Sanjana</span>
+                  <span className="serif" style={{ color:C.ink, fontWeight:600 }}>{fmtL(bpt)}</span>
+                  <span style={{ color:C.inkFaint }}>({sPct.toFixed(0)}%)</span>
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ color:C.inkFaint }}>({aPct.toFixed(0)}%)</span>
+                  <span className="serif" style={{ color:C.ink, fontWeight:600 }}>{fmtL(gpt)}</span>
+                  <span style={{ color:C.inkSoft, fontWeight:600 }}>Akhil</span>
+                  <span style={{ width:8, height:8, borderRadius:"50%", background:C.sage }} />
+                </div>
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize:12, color:C.inkFaint, fontStyle:"italic" }}>No personal expenses logged yet</div>
+          )}
+        </button>
+
+        {personalExpanded && (
+          <div style={{ borderTop:`1px solid ${C.borderLight}`, padding:18, background:C.bg }}>
+            {/* Sanjana details */}
+            <div style={{ marginBottom: groomP.length > 0 || bDue > 0 ? 20 : 0 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:10 }}>
+                <div>
+                  <div style={{ fontSize:11, color:C.rose, textTransform:"uppercase", letterSpacing:1.2, fontWeight:700 }}>✿ Sanjana</div>
+                  <div className="serif" style={{ fontSize:20, fontWeight:600, color:C.ink, marginTop:2 }}>{fmtL(bpt)}</div>
+                </div>
+                <div style={{ textAlign:"right", fontSize:11, color:C.inkSoft }}>
+                  <div>{brideP.length} expense{brideP.length !== 1 ? "s" : ""}</div>
+                  {bDue > 0 && <div style={{ color:C.amber, fontWeight:600, marginTop:2 }}>{fmtL(bDue)} due</div>}
+                  {bptCost > bpt && <div style={{ color:C.inkFaint, marginTop:2 }}>Total: {fmtL(bptCost)}</div>}
+                </div>
+              </div>
+              {recentBride.length > 0 ? (
+                <div style={{ background:"white", borderRadius:10, padding:"4px 12px", border:`1px solid ${C.borderLight}` }}>
+                  {recentBride.map(e => (
+                    <div key={e.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${C.borderLight}` }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, fontWeight:500, color:C.ink, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{e.title}</div>
+                        <div style={{ fontSize:11, color:C.inkSoft, marginTop:1 }}>{fmtDateShort(e.date)} · {e.category}{e.vendor ? ` · ${e.vendor}` : ""}</div>
+                      </div>
+                      <div className="serif" style={{ fontSize:14, fontWeight:600, color:C.ink, marginLeft:10 }}>{fmtL(e.amountPaid)}</div>
+                    </div>
+                  ))}
+                  {brideP.length > 5 && <div style={{ fontSize:11, color:C.inkFaint, padding:"6px 0", textAlign:"center", fontStyle:"italic" }}>+ {brideP.length - 5} more · View all in Expenses tab</div>}
+                </div>
+              ) : (
+                <div style={{ fontSize:12, color:C.inkFaint, fontStyle:"italic", padding:"8px 0" }}>No personal expenses yet</div>
+              )}
+            </div>
+
+            {/* Akhil details */}
+            <div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:10 }}>
+                <div>
+                  <div style={{ fontSize:11, color:C.sage, textTransform:"uppercase", letterSpacing:1.2, fontWeight:700 }}>❖ Akhil</div>
+                  <div className="serif" style={{ fontSize:20, fontWeight:600, color:C.ink, marginTop:2 }}>{fmtL(gpt)}</div>
+                </div>
+                <div style={{ textAlign:"right", fontSize:11, color:C.inkSoft }}>
+                  <div>{groomP.length} expense{groomP.length !== 1 ? "s" : ""}</div>
+                  {gDue > 0 && <div style={{ color:C.amber, fontWeight:600, marginTop:2 }}>{fmtL(gDue)} due</div>}
+                  {gptCost > gpt && <div style={{ color:C.inkFaint, marginTop:2 }}>Total: {fmtL(gptCost)}</div>}
+                </div>
+              </div>
+              {recentGroom.length > 0 ? (
+                <div style={{ background:"white", borderRadius:10, padding:"4px 12px", border:`1px solid ${C.borderLight}` }}>
+                  {recentGroom.map(e => (
+                    <div key={e.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${C.borderLight}` }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, fontWeight:500, color:C.ink, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{e.title}</div>
+                        <div style={{ fontSize:11, color:C.inkSoft, marginTop:1 }}>{fmtDateShort(e.date)} · {e.category}{e.vendor ? ` · ${e.vendor}` : ""}</div>
+                      </div>
+                      <div className="serif" style={{ fontSize:14, fontWeight:600, color:C.ink, marginLeft:10 }}>{fmtL(e.amountPaid)}</div>
+                    </div>
+                  ))}
+                  {groomP.length > 5 && <div style={{ fontSize:11, color:C.inkFaint, padding:"6px 0", textAlign:"center", fontStyle:"italic" }}>+ {groomP.length - 5} more · View all in Expenses tab</div>}
+                </div>
+              ) : (
+                <div style={{ fontSize:12, color:C.inkFaint, fontStyle:"italic", padding:"8px 0" }}>No personal expenses yet</div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Categories */}
@@ -513,8 +637,13 @@ function ExpTab({ exps, onAdd, onEdit, onDel }) {
               )}
             </div>
             <div style={{ textAlign:"right", marginLeft:12 }}>
-              <div className="serif" style={{ fontSize:18, fontWeight:600, color:C.ink }}>{fmtL(e.type==="shared" ? e.totalCost : e.amountPaid)}</div>
-              {e.type==="shared" && (e.totalCost||0) !== (e.amountPaid||0) && <div style={{ fontSize:11, color:C.sage, marginTop:2, fontWeight:500 }}>Paid: {fmtL(e.amountPaid)}</div>}
+              <div className="serif" style={{ fontSize:18, fontWeight:600, color:C.ink }}>{fmtL(e.totalCost || e.amountPaid)}</div>
+              {(e.totalCost || 0) > (e.amountPaid || 0) && (
+                <>
+                  <div style={{ fontSize:11, color:C.sage, marginTop:2, fontWeight:500 }}>Paid: {fmtL(e.amountPaid)}</div>
+                  <div style={{ fontSize:11, color:C.amber, marginTop:1, fontWeight:600 }}>Due: {fmtL((e.totalCost || 0) - (e.amountPaid || 0))}</div>
+                </>
+              )}
             </div>
           </div>
           <div style={{ display:"flex", gap:8, marginTop:10, justifyContent:"flex-end" }}>
@@ -568,7 +697,6 @@ function VendorsTab({ expList, payList }) {
       ) : vendorList.map(v => {
         const balance = v.totalCost - v.paid;
         const isExp = expanded === v.name;
-        const lastPayment = v.expenses.length ? v.expenses.sort((a,b) => new Date(b.date) - new Date(a.date))[0] : null;
         const upcomingForVendor = v.payments.filter(p => p.status !== "Paid");
         const nextDue = upcomingForVendor.sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate))[0];
 
@@ -718,7 +846,7 @@ function UpcomingTab({ payList, onAdd, onEdit, onDel, onMarkPaid }) {
    INSIGHTS TAB
    ═══════════════════════════════════════════════════════════════════════ */
 function InsTab({ data, onExport }) {
-  const { expList, payList, shared, brideP, groomP, tsc, bp, gp, bpt, gpt, ts, sett, budget, catS } = data;
+  const { expList, payList, shared, brideP, groomP, tsc, bp, gp, bpt, gpt, bptCost, gptCost, ts, sett, budget, catS } = data;
   const n = expList.length;
   const avg = n > 0 ? ts / n : 0;
   const biggest = n > 0 ? expList.reduce((mx, e) => (e.amountPaid || 0) > (mx.amountPaid || 0) ? e : mx, expList[0]) : null;
@@ -726,7 +854,10 @@ function InsTab({ data, onExport }) {
   const overBud = Object.entries(catS).filter(([,d]) => d.total > d.budget && d.budget > 0);
   const payM = {}; expList.forEach(e => { const m = e.paymentMode || "Unspecified"; payM[m] = (payM[m] || 0) + (e.amountPaid || 0); });
   const monthly = {}; expList.forEach(e => { if (!e.date) return; const k = e.date.substring(0, 7); monthly[k] = (monthly[k] || 0) + (e.amountPaid || 0); });
-  const vendorBal = tsc - shared.reduce((s, e) => s + (e.amountPaid || 0), 0);
+  // Unpaid balance = committed - paid, across all expense types
+  const sharedUnpaid = tsc - shared.reduce((s, e) => s + (e.amountPaid || 0), 0);
+  const personalUnpaid = (bptCost - bpt) + (gptCost - gpt);
+  const vendorBal = sharedUnpaid + personalUnpaid;
   const upcomingTotal = payList.filter(p => p.status !== "Paid").reduce((s,p) => s + (p.amount || 0), 0);
 
   const SR = ({ label, value, color }) => (
@@ -772,7 +903,10 @@ function InsTab({ data, onExport }) {
         <div style={{ background:`linear-gradient(135deg, ${C.red}, #A85060)`, borderRadius:14, padding:16, marginBottom:14, color:"white" }}>
           <div style={{ fontSize:11, textTransform:"uppercase", letterSpacing:1.5, opacity:0.85, fontWeight:600 }}>Unpaid Vendor Balance</div>
           <div className="serif" style={{ fontSize:22, fontWeight:600, marginTop:4 }}>{fmtL(vendorBal)}</div>
-          <div style={{ fontSize:12, opacity:0.85, marginTop:4 }}>Still owed for shared expenses</div>
+          <div style={{ fontSize:12, opacity:0.85, marginTop:4 }}>
+            Still owed across all expenses
+            {sharedUnpaid > 0 && personalUnpaid > 0 && ` · Shared: ${fmtL(sharedUnpaid)} · Personal: ${fmtL(personalUnpaid)}`}
+          </div>
         </div>
       )}
 
@@ -852,11 +986,14 @@ function InsTab({ data, onExport }) {
 /* ═══════════════════════════════════════════════════════════════════════
    PHOTO UPLOADER (used inside modals)
    ═══════════════════════════════════════════════════════════════════════ */
-function PhotoUploader({ photos, setPhotos, expenseId }) {
+function PhotoUploader({ photos, setPhotos, expenseId, onUploadingChange }) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const cameraRef = useRef(null);
   const fileRef = useRef(null);
+
+  // Notify parent when upload state changes
+  useEffect(() => { if (onUploadingChange) onUploadingChange(uploading); }, [uploading, onUploadingChange]);
 
   const uploadToCloudinary = (blob) => {
     return new Promise((resolve, reject) => {
@@ -980,12 +1117,14 @@ function ExpModal({ cats, init, onSave, onClose }) {
   const [notes, setN] = useState(init?.notes || "");
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   const sub = () => {
+    if (photoUploading) { alert("Please wait for the photo to finish uploading."); return; }
     const errs = {};
     if (!title.trim()) errs.title = "Description is required";
     if (!ap || parseFloat(ap) <= 0 || isNaN(parseFloat(ap))) errs.ap = "Enter a valid amount > 0";
-    if (type === "shared" && tc && parseFloat(tc) < parseFloat(ap || 0)) errs.tc = "Total can't be less than paid";
+    if (tc && parseFloat(tc) < parseFloat(ap || 0)) errs.tc = "Total can't be less than paid";
     setErrors(errs);
     if (Object.keys(errs).length > 0) {
       const el = document.getElementById(`field-${Object.keys(errs)[0]}`);
@@ -999,7 +1138,7 @@ function ExpModal({ cats, init, onSave, onClose }) {
       owner: type === "personal" ? owner : undefined,
       date, title: title.trim(), vendor: vendor.trim(), category: cat,
       paidBy: type === "shared" ? paidBy : owner,
-      totalCost: type === "shared" ? (parseFloat(tc) || parseFloat(ap)) : parseFloat(ap),
+      totalCost: parseFloat(tc) || parseFloat(ap),
       amountPaid: parseFloat(ap),
       paymentMode: pm, billLink: bl.trim(), photos, notes: notes.trim(),
     });
@@ -1056,25 +1195,27 @@ function ExpModal({ cats, init, onSave, onClose }) {
               {cats.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
+          <div id="field-tc">
+            <label style={lbl}>Total Cost of Item (₹) <span style={{ color:C.inkFaint, fontWeight:400 }}>(optional)</span></label>
+            <input type="number" value={tc} onChange={e=>{setTC(e.target.value); if(errors.tc) setErrors({...errors,tc:null});}} placeholder={type==="shared" ? "Full cost, e.g. 105000" : "Full price, e.g. 85000"} style={errors.tc ? inpErr : inp} />
+            <div style={{ fontSize:11, color:C.inkFaint, marginTop:4 }}>
+              {type==="shared"
+                ? "Full price — 50% share auto-calculated. Leave blank to use Amount Paid."
+                : "If paying in instalments, enter full price here and the part you paid now below. Leave blank if paying in full."}
+            </div>
+            {errMsg(errors.tc)}
+          </div>
           {type==="shared" && (
-            <>
-              <div id="field-tc">
-                <label style={lbl}>Total Cost of Item (₹)</label>
-                <input type="number" value={tc} onChange={e=>{setTC(e.target.value); if(errors.tc) setErrors({...errors,tc:null});}} placeholder="Full cost, e.g. 105000" style={errors.tc ? inpErr : inp} />
-                <div style={{ fontSize:11, color:C.inkFaint, marginTop:4 }}>Full price — 50% share auto-calculated. Leave blank to use Amount Paid.</div>
-                {errMsg(errors.tc)}
+            <div>
+              <label style={lbl}>Paid By</label>
+              <div style={{ display:"flex", gap:6 }}>
+                {["Bride","Groom","Both"].map(w => (
+                  <button key={w} onClick={() => setPB(w)} style={{ flex:1, padding:9, borderRadius:8, border:`2px solid ${paidBy===w ? C.brand : C.border}`, background: paidBy===w ? C.brandBg : "white", fontSize:12, fontWeight:600, cursor:"pointer", color: paidBy===w ? C.brand : C.inkSoft }}>
+                    {dn(w)}
+                  </button>
+                ))}
               </div>
-              <div>
-                <label style={lbl}>Paid By</label>
-                <div style={{ display:"flex", gap:6 }}>
-                  {["Bride","Groom","Both"].map(w => (
-                    <button key={w} onClick={() => setPB(w)} style={{ flex:1, padding:9, borderRadius:8, border:`2px solid ${paidBy===w ? C.brand : C.border}`, background: paidBy===w ? C.brandBg : "white", fontSize:12, fontWeight:600, cursor:"pointer", color: paidBy===w ? C.brand : C.inkSoft }}>
-                      {dn(w)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
+            </div>
           )}
           <div id="field-ap">
             <label style={lbl}>Amount Paid Now (₹){errors.ap && <span style={{ color:C.red }}> *</span>}</label>
@@ -1090,7 +1231,7 @@ function ExpModal({ cats, init, onSave, onClose }) {
           </div>
           <div>
             <label style={lbl}>📎 Receipt / Bill</label>
-            <PhotoUploader photos={photos} setPhotos={setPhotos} expenseId={init?.id} />
+            <PhotoUploader photos={photos} setPhotos={setPhotos} expenseId={init?.id} onUploadingChange={setPhotoUploading} />
           </div>
           <div>
             <label style={lbl}>Or paste a link (Google Drive, etc.)</label>
@@ -1107,8 +1248,8 @@ function ExpModal({ cats, init, onSave, onClose }) {
             ⚠ Please fill the highlighted fields
           </div>
         )}
-        <button onClick={sub} disabled={submitting} className="btn-primary" style={{ width:"100%", padding:14, marginTop:18, fontSize:15, background: submitting ? C.inkFaint : C.ink }}>
-          {submitting ? "Saving..." : (init ? "Update Expense" : "Save Expense")}
+        <button onClick={sub} disabled={submitting || photoUploading} className="btn-primary" style={{ width:"100%", padding:14, marginTop:18, fontSize:15, background: (submitting || photoUploading) ? C.inkFaint : C.ink }}>
+          {photoUploading ? "Waiting for photo..." : submitting ? "Saving..." : (init ? "Update Expense" : "Save Expense")}
         </button>
       </div>
     </div>
@@ -1217,7 +1358,9 @@ function SettingsModal({ budget, saveBudget, categories, saveCats, catS, showToa
   const [catInputs, setCatInputs] = useState({...categories});
   const [editMode, setEditMode] = useState(false);
   const allocated = Object.values(catInputs).reduce((a,b) => a+b, 0);
-  useEffect(() => { setCatInputs({...categories}); }, [categories]);
+  // Only sync from props when NOT editing — preserves user's in-progress edits
+  useEffect(() => { if (!editMode) setCatInputs({...categories}); }, [categories, editMode]);
+  useEffect(() => { setBudgetInput(budget.toString()); }, [budget]);
 
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(43,32,24,0.5)", zIndex:60, display:"flex", alignItems:"flex-end", justifyContent:"center", backdropFilter:"blur(4px)" }} onClick={e => { if(e.target===e.currentTarget) onClose(); }}>
