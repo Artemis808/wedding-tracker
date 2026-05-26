@@ -828,7 +828,7 @@ function ExpTab({ exps, onAdd, onEdit, onDel }) {
                 {(e.photos && e.photos.length > 0) && (
                   <div style={{ display:"flex", gap:6, marginTop:8 }}>
                     {e.photos.slice(0, 4).map((url, idx) => (
-                      <a key={idx} href={url} target="_blank" rel="noopener noreferrer" style={{ width:46, height:46, borderRadius:6, overflow:"hidden", background:`url(${url}) center/cover`, border:`1px solid ${C.border}` }} />
+                      <a key={idx} href={url} target="_blank" rel="noopener noreferrer" aria-label={`View receipt ${idx+1}`} style={{ width:46, height:46, borderRadius:6, overflow:"hidden", background:`url(${url}) center/cover`, border:`1px solid ${C.border}`, display:"block" }}><span style={{ position:"absolute", left:"-9999px" }}>View receipt</span></a>
                     ))}
                     {e.photos.length > 4 && <div style={{ width:46, height:46, borderRadius:6, background:C.borderLight, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, color:C.inkSoft }}>+{e.photos.length-4}</div>}
                   </div>
@@ -1078,7 +1078,7 @@ function UpcomingTab({ payList, onAdd, onEdit, onDel, onMarkPaid }) {
    INSIGHTS TAB
    ═══════════════════════════════════════════════════════════════════════ */
 function InsTab({ data, onExport }) {
-  const { expList, payList, shared, brideP, groomP, tsc, bp, gp, bpt, gpt, bptCost, gptCost, ts, sett, budget, catS } = data;
+  const { expList, payList, shared, tsc, bp, gp, bpt, gpt, bptCost, gptCost, ts, budget, catS } = data;
   const n = expList.length;
   const avg = n > 0 ? ts / n : 0;
   const biggest = n > 0 ? expList.reduce((mx, e) => (e.amountPaid || 0) > (mx.amountPaid || 0) ? e : mx, expList[0]) : null;
@@ -1323,7 +1323,7 @@ function PhotoUploader({ photos, setPhotos, expenseId, onUploadingChange }) {
         <div style={{ display:"flex", gap:8, marginBottom:10, flexWrap:"wrap" }}>
           {photos.map((url, idx) => (
             <div key={idx} style={{ position:"relative", width:70, height:70 }}>
-              <a href={url} target="_blank" rel="noopener noreferrer" style={{ display:"block", width:"100%", height:"100%", borderRadius:8, overflow:"hidden", background:`url(${url}) center/cover`, border:`1px solid ${C.border}` }} />
+              <a href={url} target="_blank" rel="noopener noreferrer" aria-label={`View receipt ${idx+1}`} style={{ display:"block", width:"100%", height:"100%", borderRadius:8, overflow:"hidden", background:`url(${url}) center/cover`, border:`1px solid ${C.border}`, position:"relative" }}><span style={{ position:"absolute", left:"-9999px" }}>View receipt</span></a>
               <button type="button" onClick={() => removePhoto(idx)} style={{ position:"absolute", top:-6, right:-6, width:22, height:22, borderRadius:"50%", background:C.red, color:"white", border:"2px solid white", cursor:"pointer", fontSize:12, fontWeight:700, padding:0, lineHeight:1 }}>×</button>
             </div>
           ))}
