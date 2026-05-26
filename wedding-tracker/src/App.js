@@ -38,69 +38,74 @@ const eventEmoji = (id) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
-   WARM WEDDING COLOR PALETTE
+   EMERALD & GOLD PALETTE (Art Deco wedding suite)
    ═══════════════════════════════════════════════════════════════════════ */
 const C = {
-  // Backgrounds — warm champagne / ivory
-  bg: "#FBF6EE",
-  bg2: "#F5EBD8",
-  bgWarm: "#FAF1E0",
+  // Backgrounds — soft sage-cream warming to ivory
+  bg: "#F4EFE3",            // sage-cream base
+  bg2: "#EAE2D0",           // warm sage-tan
+  bgWarm: "#F5E9C8",        // buttery cream (Image 3 hint)
   cardBg: "#FFFFFF",
-  ivory: "#FFFCF5",
+  ivory: "#FAF6EC",
 
-  // Inks — deep warm browns for text
-  ink: "#2B2018",
-  inkSoft: "#5C4A3D",
-  inkFaint: "#8A7568",
+  // Inks — deep charcoal text (high contrast)
+  ink: "#11140B",           // near-black charcoal
+  inkSoft: "#3A4234",       // dark olive for secondary
+  inkFaint: "#7A8073",      // sage-grey for tertiary
 
-  // Borders
-  border: "#E5D6BF",
-  borderLight: "#F0E5D0",
+  // Borders — soft sage
+  border: "#D4CDB8",
+  borderLight: "#E8E1CC",
 
-  // Brand — rich terracotta (signature)
-  brand: "#9B5536",
-  brandSoft: "#C17950",
-  brandBg: "#FBE9DC",
-  brandDeep: "#7A3E22",
+  // Brand — deep forest emerald (new signature)
+  brand: "#25392E",
+  brandSoft: "#48573A",     // olive
+  brandBg: "#DEE6D8",       // pale sage-green wash
+  brandDeep: "#11140B",     // near-black
 
-  // Gold — warm metallic accent
-  gold: "#B89432",
-  goldSoft: "#D4AF37",
-  goldBright: "#E5C158",
-  goldBg: "#F8EFD0",
-  goldDeep: "#8C6E1E",
+  // Gold — antique muted gold
+  gold: "#C7A76D",          // primary gold
+  goldSoft: "#D9BD8C",      // lighter gold
+  goldBright: "#E5CFA0",    // soft warm gold
+  goldBg: "#F2E6CC",        // pale gold cream
+  goldDeep: "#9B7E4A",      // deep brass
 
-  // Green — deeper emerald, warmer than sage
-  green: "#3F6B4A",
-  greenSoft: "#6B9774",
-  greenBg: "#DEE9DD",
-  greenDeep: "#2C4F35",
+  // Green — olive/forest tones for Akhil
+  green: "#48573A",         // olive (Image 2)
+  greenSoft: "#7A8B68",
+  greenBg: "#DDE3D2",
+  greenDeep: "#25392E",
 
-  // Rose — Sanjana
-  rose: "#8B4A56",
-  roseSoft: "#C4908B",
-  roseBg: "#F5D8DA",
-  roseDeep: "#6B3540",
+  // Sanjana — warm dusty rose (clearly distinct from gold and emerald)
+  rose: "#A4737A",          // dusty rose
+  roseSoft: "#C5A0A5",
+  roseBg: "#EDDCDE",
+  roseDeep: "#7E555B",
 
-  // Plum
-  plum: "#5A3A52",
-  plumBg: "#EBDCE6",
+  // Plum — for reception
+  plum: "#6B4760",
+  plumBg: "#E8DAE3",
 
-  // Alerts
-  red: "#8B2A2A",
-  redBg: "#F5D5D5",
-  amber: "#A05B1F",
-  amberBg: "#F8E1C5",
+  // Mint — soft success accent (Image 3 hint)
+  mint: "#9BB39B",
+  mintBg: "#DEE9DD",
+  mintBright: "#C8DBC4",
+
+  // Alerts — warm wine instead of bright red
+  red: "#7A2E3A",
+  redBg: "#F0DBE0",
+  amber: "#A87C3A",         // gold-family amber
+  amberBg: "#F2E0BD",
 
   // Event colors
-  engagement: "#B89432",        // gold
-  engagementBg: "#F8EFD0",
-  wedding: "#9B5536",           // brand terracotta
-  weddingBg: "#FBE9DC",
-  reception: "#5A3A52",         // plum
-  receptionBg: "#EBDCE6",
-  general: "#5C4A3D",           // ink soft
-  generalBg: "#F0E5D0",
+  engagement: "#C7A76D",      // antique gold
+  engagementBg: "#F2E6CC",
+  wedding: "#25392E",         // forest emerald
+  weddingBg: "#DEE6D8",
+  reception: "#6B4760",       // warm plum
+  receptionBg: "#E8DAE3",
+  general: "#7A8073",         // sage-grey
+  generalBg: "#E8E1CC",
 };
 
 const eventColor = (id) => {
@@ -220,19 +225,19 @@ body { font-family: 'Inter', -apple-system, sans-serif; color: ${C.ink}; -webkit
 .expand-down { animation: expandDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; overflow:hidden; }
 .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
 .toast-msg { position:fixed; bottom:96px; left:50%; transform:translateX(-50%); background:${C.ink}; color:white; padding:11px 26px; border-radius:24px; font-size:14px; font-weight:600; z-index:100; animation:fadeUp .3s ease; box-shadow:0 12px 32px rgba(0,0,0,0.25); max-width: 90%; letter-spacing:0.2px; }
-.btn-primary { background:${C.brand}; color:white; border:none; border-radius:12px; font-weight:600; cursor:pointer; box-shadow:0 4px 14px rgba(155,85,54,.28); transition:all 0.25s cubic-bezier(0.16, 1, 0.3, 1); letter-spacing:0.2px; }
-.btn-primary:hover { box-shadow: 0 8px 22px rgba(155,85,54,.4); transform: translateY(-1px); }
+.btn-primary { background:${C.brand}; color:white; border:none; border-radius:12px; font-weight:600; cursor:pointer; box-shadow:0 4px 14px rgba(37,57,46,.32); transition:all 0.25s cubic-bezier(0.16, 1, 0.3, 1); letter-spacing:0.2px; }
+.btn-primary:hover { box-shadow: 0 8px 22px rgba(37,57,46,.45); transform: translateY(-1px); }
 .btn-primary:active { transform:translateY(0) scale(0.98); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform:none; }
-.btn-gold { background:linear-gradient(135deg, ${C.gold}, ${C.goldBright}); color:white; border:none; border-radius:12px; font-weight:600; cursor:pointer; box-shadow:0 4px 14px rgba(184,148,50,.32); transition:all 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
-.btn-gold:hover { box-shadow:0 8px 22px rgba(184,148,50,.45); transform: translateY(-1px); }
+.btn-gold { background:linear-gradient(135deg, ${C.gold}, ${C.goldSoft}); color:white; border:none; border-radius:12px; font-weight:600; cursor:pointer; box-shadow:0 4px 14px rgba(199,167,109,.4); transition:all 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+.btn-gold:hover { box-shadow:0 8px 22px rgba(199,167,109,.5); transform: translateY(-1px); }
 .btn-gold:active { transform: translateY(0) scale(0.98); }
-.card { background:${C.cardBg}; border-radius:16px; padding:18px; margin-bottom:14px; box-shadow:0 1px 3px rgba(43,32,24,0.05), 0 6px 16px rgba(43,32,24,0.04); transition: box-shadow 0.25s ease; }
-.card:hover { box-shadow:0 1px 3px rgba(43,32,24,0.06), 0 8px 24px rgba(43,32,24,0.06); }
+.card { background:${C.cardBg}; border-radius:16px; padding:18px; margin-bottom:14px; box-shadow:0 1px 3px rgba(17,20,11,0.05), 0 6px 16px rgba(17,20,11,0.05); transition: box-shadow 0.25s ease; }
+.card:hover { box-shadow:0 1px 3px rgba(17,20,11,0.06), 0 8px 24px rgba(17,20,11,0.07); }
 .card-press { transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1); }
 .card-press:active { transform: scale(0.99); }
 input, select, textarea { font-family: 'Inter', sans-serif; color: ${C.ink}; }
-input:focus, select:focus, textarea:focus { outline:none; border-color:${C.brand}!important; box-shadow:0 0 0 3px rgba(155,85,54,.15); }
+input:focus, select:focus, textarea:focus { outline:none; border-color:${C.brand}!important; box-shadow:0 0 0 3px rgba(37,57,46,.18); }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 3px; }
 .tab-btn { background:none; border:none; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px; padding: 4px 6px; transition: color 0.2s, transform 0.15s; }
@@ -404,7 +409,7 @@ export default function App() {
    ═══════════════════════════════════════════════════════════════════════ */
 function Header({ conn, onSettings }) {
   return (
-    <div style={{ background:`linear-gradient(135deg, ${C.ink} 0%, ${C.brandDeep} 100%)`, padding:"22px 18px 18px", color:"white", position:"relative", overflow:"hidden" }}>
+    <div style={{ background:`linear-gradient(135deg, ${C.brand} 0%, ${C.ink} 100%)`, padding:"22px 18px 18px", color:"white", position:"relative", overflow:"hidden" }}>
       {/* Decorative gold blobs */}
       <div style={{ position:"absolute", top:-40, right:-40, width:160, height:160, borderRadius:"50%", background:`radial-gradient(circle, rgba(212,175,55,0.18) 0%, transparent 70%)` }} />
       <div style={{ position:"absolute", bottom:-50, left:-30, width:120, height:120, borderRadius:"50%", background:`radial-gradient(circle, rgba(196,144,139,0.15) 0%, transparent 70%)` }} />
@@ -426,9 +431,9 @@ function Header({ conn, onSettings }) {
       {/* Three event countdowns */}
       <div style={{ display:"flex", gap:6, marginTop:14, position:"relative" }}>
         {[
-          { l:"Engagement", d:ENGAGEMENT_DATE, e:"💍", color:C.goldBright },
-          { l:"Wedding",    d:WEDDING_DATE,    e:"🎊", color:C.brandSoft },
-          { l:"Reception",  d:RECEPTION_DATE,  e:"🥂", color:"#C19BD0" },
+          { l:"Engagement", d:ENGAGEMENT_DATE, e:"💍", color:"#E5CFA0" },
+          { l:"Wedding",    d:WEDDING_DATE,    e:"🎊", color:"#A8BB97" },
+          { l:"Reception",  d:RECEPTION_DATE,  e:"🥂", color:"#D4ADBE" },
         ].map((ev,i) => (
           <div key={i} className="fade-up" style={{ flex:1, background:"rgba(255,255,255,0.10)", borderRadius:12, padding:"10px 10px", border:"1px solid rgba(255,255,255,0.15)", animationDelay:`${i*0.05}s` }}>
             <div style={{ fontSize:9, opacity:0.75, textTransform:"uppercase", letterSpacing:1, fontWeight:600 }}>{ev.e} {ev.l}</div>
@@ -463,7 +468,7 @@ function DashTab({ budget, ts, rem, tsc, sett, bp, gp, bpt, gpt, bptCost, gptCos
 
       {/* KPI cards */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
-        <KpiCard label="Budget" value={fmtL(budget)} bg={`linear-gradient(135deg, ${C.ink}, ${C.brandDeep})`} delay={0} />
+        <KpiCard label="Budget" value={fmtL(budget)} bg={`linear-gradient(135deg, ${C.brand}, ${C.ink})`} delay={0} />
         <KpiCard label="Spent" value={fmtL(ts)} bg={`linear-gradient(135deg, ${C.rose}, ${C.roseSoft})`} delay={0.05} />
         <KpiCard label="Remaining" value={fmtL(rem)} bg={`linear-gradient(135deg, ${C.green}, ${C.greenSoft})`} neg={rem<0} delay={0.1} />
         <KpiCard label="Shared" value={fmtL(tsc)} bg={`linear-gradient(135deg, ${C.brand}, ${C.brandSoft})`} delay={0.15} />
@@ -480,7 +485,7 @@ function DashTab({ budget, ts, rem, tsc, sett, bp, gp, bpt, gpt, bptCost, gptCos
       </div>
 
       {/* Settlement */}
-      <div className="slide-in" style={{ background:`linear-gradient(135deg, ${C.brand}, ${C.brandSoft})`, borderRadius:18, padding:22, marginBottom:14, color:"white", boxShadow:"0 8px 28px rgba(155,85,54,0.28)", position:"relative", overflow:"hidden", animationDelay:"0.25s" }}>
+      <div className="slide-in" style={{ background:`linear-gradient(135deg, ${C.brand}, ${C.brandSoft})`, borderRadius:18, padding:22, marginBottom:14, color:"white", boxShadow:"0 8px 28px rgba(37,57,46,0.32)", position:"relative", overflow:"hidden", animationDelay:"0.25s" }}>
         <div style={{ position:"absolute", top:-30, right:-20, width:120, height:120, borderRadius:"50%", background:"radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%)" }} />
         <div style={{ fontSize:11, textTransform:"uppercase", letterSpacing:1.5, opacity:0.85, marginBottom:8, fontWeight:600, position:"relative" }}>Settlement</div>
         <div className="serif" style={{ fontSize:26, fontWeight:600, marginBottom:6, lineHeight:1.2, position:"relative" }}>
@@ -888,7 +893,7 @@ function VendorsTab({ expList, payList }) {
 
   return (
     <div style={{ padding:16 }} className="fade-up">
-      <div className="card" style={{ background: `linear-gradient(135deg, ${C.plum}, #7B5570)`, color:"white" }}>
+      <div className="card" style={{ background: `linear-gradient(135deg, ${C.plum}, #8C6379)`, color:"white" }}>
         <div style={{ fontSize:11, textTransform:"uppercase", letterSpacing:1.5, opacity:0.85, marginBottom:4, fontWeight:600 }}>Vendor Overview</div>
         <div className="serif" style={{ fontSize:24, fontWeight:600 }}>{vendorList.length} vendor{vendorList.length !== 1 ? "s" : ""}</div>
         <div style={{ fontSize:12, opacity:0.85, marginTop:4 }}>Tap a vendor to see all transactions</div>
@@ -1000,7 +1005,7 @@ function UpcomingTab({ payList, onAdd, onEdit, onDel, onMarkPaid }) {
 
   return (
     <div style={{ padding:16 }} className="fade-up">
-      <div className="card" style={{ background:`linear-gradient(135deg, ${C.amber}, #C77F4A)`, color:"white", position:"relative", overflow:"hidden" }}>
+      <div className="card" style={{ background:`linear-gradient(135deg, ${C.amber}, #C7A06D)`, color:"white", position:"relative", overflow:"hidden" }}>
         <div style={{ position:"absolute", top:-20, right:-20, width:100, height:100, borderRadius:"50%", background:"radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%)" }} />
         <div style={{ fontSize:11, textTransform:"uppercase", letterSpacing:1.5, opacity:0.85, marginBottom:4, fontWeight:600, position:"relative" }}>Upcoming Total</div>
         <div className="serif" style={{ fontSize:26, fontWeight:600, position:"relative" }}>{fmtL(totalDue)}</div>
@@ -1175,7 +1180,7 @@ function InsTab({ data, onExport }) {
       </div>
 
       {vendorBal > 0 && (
-        <div style={{ background:`linear-gradient(135deg, ${C.red}, #A85060)`, borderRadius:14, padding:16, marginBottom:14, color:"white" }}>
+        <div style={{ background:`linear-gradient(135deg, ${C.red}, #9C4452)`, borderRadius:14, padding:16, marginBottom:14, color:"white" }}>
           <div style={{ fontSize:11, textTransform:"uppercase", letterSpacing:1.5, opacity:0.85, fontWeight:600 }}>Unpaid Vendor Balance</div>
           <div className="serif" style={{ fontSize:22, fontWeight:600, marginTop:4 }}>{fmtL(vendorBal)}</div>
           <div style={{ fontSize:12, opacity:0.85, marginTop:4 }}>
