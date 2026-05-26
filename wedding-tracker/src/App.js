@@ -2,11 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { db } from "./firebase";
 import { ref, onValue, set, push, remove, update, serverTimestamp } from "firebase/database";
 
-// Cloudinary config — for photo uploads (free, no credit card needed)
-const CLOUDINARY = {
-  cloudName: "dfiekkr9x",
-  uploadPreset: "wedding_bills",
-};
+const CLOUDINARY = { cloudName: "dfiekkr9x", uploadPreset: "wedding_bills" };
 
 /* ═══════════════════════════════════════════════════════════════════════
    CONSTANTS
@@ -18,41 +14,101 @@ const DEFAULT_CATEGORIES = {
   "Honeymoon": 0, "Miscellaneous": 50000, "Contingency": 80000,
 };
 const ENGAGEMENT_DATE = new Date("2026-08-23");
-const WEDDING_DATE = new Date("2026-11-11");
+const WEDDING_DATE = new Date("2026-11-11T08:00:00");
+const RECEPTION_DATE = new Date("2026-11-11T19:00:00");
 const PAYMENT_MODES = ["UPI", "Cash", "Credit Card", "Debit Card", "Bank Transfer", "Cheque", "Other"];
 const NAME = { Bride: "Sanjana", Groom: "Akhil", Both: "Both" };
 const dn = (v) => NAME[v] || v;
 
+// Events
+const EVENTS = [
+  { id: "engagement", label: "Engagement", short: "Engagement", emoji: "💍", date: ENGAGEMENT_DATE },
+  { id: "wedding",    label: "Wedding",    short: "Wedding",    emoji: "🎊", date: WEDDING_DATE },
+  { id: "reception",  label: "Reception",  short: "Reception",  emoji: "🥂", date: RECEPTION_DATE },
+  { id: "general",    label: "General",    short: "General",    emoji: "✦", date: null },
+];
+const UNCATEGORIZED = { id: "uncategorized", label: "Uncategorized", short: "Untagged", emoji: "·" };
+const eventLabel = (id) => {
+  const e = EVENTS.find(ev => ev.id === id);
+  return e ? e.label : "Uncategorized";
+};
+const eventEmoji = (id) => {
+  const e = EVENTS.find(ev => ev.id === id);
+  return e ? e.emoji : "·";
+};
+
 /* ═══════════════════════════════════════════════════════════════════════
-   COLOR TOKENS — refined for better contrast
+   WARM WEDDING COLOR PALETTE
    ═══════════════════════════════════════════════════════════════════════ */
 const C = {
-  bg: "#FBF6EE",          // softer cream
-  bg2: "#F5E8DB",         // gradient end
-  ink: "#2B2018",         // near-black, high contrast
-  inkSoft: "#5C4A3D",     // for secondary text — much better than 8C7B6F
-  inkFaint: "#8A7568",    // for hint text only
-  border: "#D9CCBC",
-  borderLight: "#EDE3D5",
+  // Backgrounds — warm champagne / ivory
+  bg: "#FBF6EE",
+  bg2: "#F5EBD8",
+  bgWarm: "#FAF1E0",
   cardBg: "#FFFFFF",
-  brand: "#9B5536",       // deeper terracotta
+  ivory: "#FFFCF5",
+
+  // Inks — deep warm browns for text
+  ink: "#2B2018",
+  inkSoft: "#5C4A3D",
+  inkFaint: "#8A7568",
+
+  // Borders
+  border: "#E5D6BF",
+  borderLight: "#F0E5D0",
+
+  // Brand — rich terracotta (signature)
+  brand: "#9B5536",
   brandSoft: "#C17950",
   brandBg: "#FBE9DC",
-  rose: "#8B4A56",        // deeper rose
-  roseSoft: "#C4908B",
-  roseBg: "#F8E0E2",
-  sage: "#4F6B53",        // deeper sage
-  sageSoft: "#A8B5A0",
-  sageBg: "#E4EDE0",
+  brandDeep: "#7A3E22",
+
+  // Gold — warm metallic accent
   gold: "#B89432",
   goldSoft: "#D4AF37",
-  goldBg: "#F5EBC9",
+  goldBright: "#E5C158",
+  goldBg: "#F8EFD0",
+  goldDeep: "#8C6E1E",
+
+  // Green — deeper emerald, warmer than sage
+  green: "#3F6B4A",
+  greenSoft: "#6B9774",
+  greenBg: "#DEE9DD",
+  greenDeep: "#2C4F35",
+
+  // Rose — Sanjana
+  rose: "#8B4A56",
+  roseSoft: "#C4908B",
+  roseBg: "#F5D8DA",
+  roseDeep: "#6B3540",
+
+  // Plum
   plum: "#5A3A52",
   plumBg: "#EBDCE6",
+
+  // Alerts
   red: "#8B2A2A",
   redBg: "#F5D5D5",
   amber: "#A05B1F",
   amberBg: "#F8E1C5",
+
+  // Event colors
+  engagement: "#B89432",        // gold
+  engagementBg: "#F8EFD0",
+  wedding: "#9B5536",           // brand terracotta
+  weddingBg: "#FBE9DC",
+  reception: "#5A3A52",         // plum
+  receptionBg: "#EBDCE6",
+  general: "#5C4A3D",           // ink soft
+  generalBg: "#F0E5D0",
+};
+
+const eventColor = (id) => {
+  if (id === "engagement") return { c: C.engagement, bg: C.engagementBg };
+  if (id === "wedding") return { c: C.wedding, bg: C.weddingBg };
+  if (id === "reception") return { c: C.reception, bg: C.receptionBg };
+  if (id === "general") return { c: C.general, bg: C.generalBg };
+  return { c: C.inkFaint, bg: C.borderLight };
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -83,16 +139,16 @@ const daysUntil = (d) => {
   return Math.round((target - t) / 86400000);
 };
 const countdown = (target) => {
+  if (!target) return "—";
   const t = new Date(); t.setHours(0,0,0,0);
-  if (t >= target) return target === ENGAGEMENT_DATE ? "Done! 💍" : "Today! 🎊";
-  const d = Math.ceil((target - t) / 86400000);
+  const tg = new Date(target); tg.setHours(0,0,0,0);
+  if (t >= tg) return "Today!";
+  const d = Math.ceil((tg - t) / 86400000);
   if (d > 60) { const m = Math.floor(d / 30); return `${m}M ${d % 30}D`; }
   return `${d} days`;
 };
 const clean = (obj) => { const o = {}; Object.keys(obj).forEach(k => { if (obj[k] !== undefined && obj[k] !== null && obj[k] !== "") o[k] = obj[k]; }); return o; };
-const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-// Compress image before upload — caps at ~1MB
 async function compressImage(file, maxW = 1600, quality = 0.82) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -119,22 +175,24 @@ async function compressImage(file, maxW = 1600, quality = 0.82) {
 /* ═══════════════════════════════════════════════════════════════════════
    EXCEL EXPORT
    ═══════════════════════════════════════════════════════════════════════ */
-function exportCSV(expList, payList, categories, catSpending, budget, settlement, bp, gp, bpt, gpt, ts, tsc) {
+function exportCSV(expList, payList, categories, catS, budget, sett, bp, gp, bpt, gpt, ts, tsc) {
   let c = "\uFEFF";
   c += "WEDDING EXPENSES SUMMARY\n";
   c += `Total Budget,${budget}\nTotal Spent,${ts}\nRemaining,${budget - tsc - bpt - gpt}\nTotal Shared Costs,${tsc}\n`;
   c += `Sanjana Paid (Shared),${bp}\nAkhil Paid (Shared),${gp}\nSanjana Personal,${bpt}\nAkhil Personal,${gpt}\n`;
-  c += `Settlement,${Math.abs(settlement) < 1 ? "All Settled" : settlement > 0 ? "Akhil owes Sanjana " + Math.abs(settlement) : "Sanjana owes Akhil " + Math.abs(settlement)}\n\n`;
+  c += `Settlement,${Math.abs(sett) < 1 ? "All Settled" : sett > 0 ? "Akhil owes Sanjana " + Math.abs(sett) : "Sanjana owes Akhil " + Math.abs(sett)}\n\n`;
   c += "CATEGORY BREAKDOWN\nCategory,Budget,Shared Spent,Sanjana Personal,Akhil Personal,Total Spent,Remaining,% Used\n";
-  Object.entries(catSpending).forEach(([cat, d]) => { c += `"${cat}",${d.budget},${d.shared},${d.brideP},${d.groomP},${d.total},${d.budget - d.total},${d.budget > 0 ? ((d.total / d.budget) * 100).toFixed(1) + "%" : "0%"}\n`; });
-  c += "\nALL EXPENSES\nDate,Type,Description,Category,Vendor,Paid By,Total Cost,Amount Paid,Payment Mode,Bill Link,Notes\n";
+  Object.entries(catS).forEach(([cat, d]) => { c += `"${cat}",${d.budget},${d.shared},${d.brideP},${d.groomP},${d.total},${d.budget - d.total},${d.budget > 0 ? ((d.total / d.budget) * 100).toFixed(1) + "%" : "0%"}\n`; });
+  c += "\nALL EXPENSES\nDate,Event,Type,Description,Category,Vendor,Paid By,Total Cost,Amount Paid,Payment Mode,Bill Link,Notes\n";
   [...expList].sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt)).forEach(e => {
-    c += `${e.date || ""},${e.type === "shared" ? "Shared" : dn(e.owner) + " Personal"},"${(e.title || "").replace(/"/g, '""')}","${e.category || ""}","${(e.vendor || "").replace(/"/g, '""')}",${e.type === "shared" ? dn(e.paidBy) : dn(e.owner)},${e.totalCost || e.amountPaid || 0},${e.amountPaid || 0},${e.paymentMode || ""},"${(e.photos && e.photos.length ? e.photos.join(" | ") : e.billLink) || ""}","${(e.notes || "").replace(/"/g, '""')}"\n`;
+    const evt = eventLabel(e.event);
+    const photos = (e.photos && e.photos.length ? e.photos.join(" | ") : e.billLink) || "";
+    c += `${e.date || ""},${evt},${e.type === "shared" ? "Shared" : dn(e.owner) + " Personal"},"${(e.title || "").replace(/"/g, '""')}","${e.category || ""}","${(e.vendor || "").replace(/"/g, '""')}",${e.type === "shared" ? dn(e.paidBy) : dn(e.owner)},${e.totalCost || e.amountPaid || 0},${e.amountPaid || 0},${e.paymentMode || ""},"${photos}","${(e.notes || "").replace(/"/g, '""')}"\n`;
   });
   if (payList.length) {
-    c += "\nUPCOMING PAYMENTS\nDue Date,Vendor,Description,Category,Amount,Who Pays,Status,Notes\n";
+    c += "\nUPCOMING PAYMENTS\nDue Date,Event,Vendor,Description,Category,Amount,Who Pays,Status,Notes\n";
     [...payList].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate)).forEach(p => {
-      c += `${p.dueDate || ""},"${(p.vendor || "").replace(/"/g, '""')}","${(p.title || "").replace(/"/g, '""')}","${p.category || ""}",${p.amount || 0},${dn(p.whoPays)},${p.status || "Pending"},"${(p.notes || "").replace(/"/g, '""')}"\n`;
+      c += `${p.dueDate || ""},${eventLabel(p.event)},"${(p.vendor || "").replace(/"/g, '""')}","${(p.title || "").replace(/"/g, '""')}","${p.category || ""}",${p.amount || 0},${dn(p.whoPays)},${p.status || "Pending"},"${(p.notes || "").replace(/"/g, '""')}"\n`;
     });
   }
   const blob = new Blob([c], { type: "text/csv;charset=utf-8;" });
@@ -151,24 +209,38 @@ const css = `
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Inter', -apple-system, sans-serif; color: ${C.ink}; -webkit-font-smoothing: antialiased; }
 .serif { font-family: 'Fraunces', Georgia, serif; font-feature-settings: 'ss01'; }
-@keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+@keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
 @keyframes slideIn { from { opacity:0; transform:translateX(-10px); } to { opacity:1; transform:translateX(0); } }
+@keyframes expandDown { from { opacity:0; max-height:0; } to { opacity:1; max-height:2000px; } }
 @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.5; transform:scale(1.2); } }
 @keyframes spin { to { transform: rotate(360deg); } }
-.fade-up { animation: fadeUp .35s ease both; }
-.slide-in { animation: slideIn .3s ease both; }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+.fade-up { animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.slide-in { animation: slideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.expand-down { animation: expandDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; overflow:hidden; }
 .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
-.toast-msg { position:fixed; bottom:90px; left:50%; transform:translateX(-50%); background:${C.ink}; color:white; padding:10px 24px; border-radius:24px; font-size:14px; font-weight:600; z-index:100; animation:fadeUp .3s ease; box-shadow:0 8px 24px rgba(0,0,0,0.2); max-width: 90%; }
-.btn-primary { background:${C.brand}; color:white; border:none; border-radius:12px; font-weight:600; cursor:pointer; box-shadow:0 4px 12px rgba(155,85,54,.25); transition:transform .1s, box-shadow .2s; }
-.btn-primary:hover { box-shadow: 0 6px 16px rgba(155,85,54,.35); }
-.btn-primary:active { transform:scale(.98); }
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.card { background:${C.cardBg}; border-radius:16px; padding:18px; margin-bottom:14px; box-shadow:0 1px 3px rgba(43,32,24,0.06), 0 4px 12px rgba(43,32,24,0.04); }
+.toast-msg { position:fixed; bottom:96px; left:50%; transform:translateX(-50%); background:${C.ink}; color:white; padding:11px 26px; border-radius:24px; font-size:14px; font-weight:600; z-index:100; animation:fadeUp .3s ease; box-shadow:0 12px 32px rgba(0,0,0,0.25); max-width: 90%; letter-spacing:0.2px; }
+.btn-primary { background:${C.brand}; color:white; border:none; border-radius:12px; font-weight:600; cursor:pointer; box-shadow:0 4px 14px rgba(155,85,54,.28); transition:all 0.25s cubic-bezier(0.16, 1, 0.3, 1); letter-spacing:0.2px; }
+.btn-primary:hover { box-shadow: 0 8px 22px rgba(155,85,54,.4); transform: translateY(-1px); }
+.btn-primary:active { transform:translateY(0) scale(0.98); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform:none; }
+.btn-gold { background:linear-gradient(135deg, ${C.gold}, ${C.goldBright}); color:white; border:none; border-radius:12px; font-weight:600; cursor:pointer; box-shadow:0 4px 14px rgba(184,148,50,.32); transition:all 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+.btn-gold:hover { box-shadow:0 8px 22px rgba(184,148,50,.45); transform: translateY(-1px); }
+.btn-gold:active { transform: translateY(0) scale(0.98); }
+.card { background:${C.cardBg}; border-radius:16px; padding:18px; margin-bottom:14px; box-shadow:0 1px 3px rgba(43,32,24,0.05), 0 6px 16px rgba(43,32,24,0.04); transition: box-shadow 0.25s ease; }
+.card:hover { box-shadow:0 1px 3px rgba(43,32,24,0.06), 0 8px 24px rgba(43,32,24,0.06); }
+.card-press { transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1); }
+.card-press:active { transform: scale(0.99); }
 input, select, textarea { font-family: 'Inter', sans-serif; color: ${C.ink}; }
-input:focus, select:focus, textarea:focus { outline:none; border-color:${C.brand}!important; box-shadow:0 0 0 3px rgba(155,85,54,.12); }
+input:focus, select:focus, textarea:focus { outline:none; border-color:${C.brand}!important; box-shadow:0 0 0 3px rgba(155,85,54,.15); }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 3px; }
-.tab-btn { background:none; border:none; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px; padding: 4px 8px; transition: color 0.2s; }
+.tab-btn { background:none; border:none; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px; padding: 4px 6px; transition: color 0.2s, transform 0.15s; }
+.tab-btn:active { transform: scale(0.92); }
+.chip { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:12px; font-size:10px; font-weight:600; letter-spacing:0.3px; }
+.shimmer-gold { background: linear-gradient(90deg, ${C.gold}, ${C.goldBright}, ${C.gold}); background-size: 200% 100%; animation: shimmer 3s linear infinite; }
+.chevron { display:inline-block; transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); color:${C.inkFaint}; font-size:14px; }
+.chevron.open { transform: rotate(180deg); }
 `;
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -213,9 +285,14 @@ export default function App() {
   const addExp = d => set(push(ref(db, "expenses")), { ...clean(d), createdAt: new Date().toISOString() })
     .then(() => showToast("Expense added ✓"))
     .catch(err => { console.error(err); showToast("⚠️ Failed: " + (err.message || "unknown")); });
-  const updExp = (id, d) => update(ref(db, `expenses/${id}`), clean(d))
-    .then(() => showToast("Updated ✓"))
-    .catch(err => { console.error(err); showToast("⚠️ Update failed"); });
+  const updExp = (id, d) => {
+    // Allow clearing event field even though clean removes empty strings
+    const cleaned = clean(d);
+    if (d.event === "" || d.event === undefined) cleaned.event = null;
+    return update(ref(db, `expenses/${id}`), cleaned)
+      .then(() => showToast("Updated ✓"))
+      .catch(err => { console.error(err); showToast("⚠️ Update failed"); });
+  };
   const delExp = id => remove(ref(db, `expenses/${id}`)).then(() => showToast("Deleted ✓")).catch(() => showToast("⚠️ Failed"));
 
   const addPay = d => set(push(ref(db, "payments")), { ...clean(d), createdAt: new Date().toISOString(), status: d.status || "Pending" })
@@ -224,24 +301,18 @@ export default function App() {
   const updPay = (id, d) => update(ref(db, `payments/${id}`), clean(d)).then(() => showToast("Updated ✓")).catch(() => showToast("⚠️ Failed"));
   const delPay = id => remove(ref(db, `payments/${id}`)).then(() => showToast("Deleted ✓")).catch(() => showToast("⚠️ Failed"));
 
-  // Convert an upcoming payment into a paid expense
   const markPayAsPaid = (pay) => {
     const expData = {
       type: pay.shared ? "shared" : "personal",
       owner: pay.shared ? undefined : pay.whoPays,
+      event: pay.event,
       date: new Date().toISOString().split("T")[0],
       title: pay.title || pay.vendor,
-      category: pay.category,
-      vendor: pay.vendor,
-      paidBy: pay.whoPays,
-      totalCost: pay.amount,
-      amountPaid: pay.amount,
-      paymentMode: "",
-      billLink: "",
-      photos: [],
+      category: pay.category, vendor: pay.vendor, paidBy: pay.whoPays,
+      totalCost: pay.amount, amountPaid: pay.amount,
+      paymentMode: "", billLink: "", photos: [],
       notes: pay.notes ? `From scheduled payment: ${pay.notes}` : "Converted from scheduled payment",
     };
-    // First add the expense, only mark payment as paid if successful
     set(push(ref(db, "expenses")), { ...clean(expData), createdAt: new Date().toISOString() })
       .then(() => {
         update(ref(db, `payments/${pay.id}`), { status: "Paid", paidOn: new Date().toISOString().split("T")[0] }).catch(() => {});
@@ -250,6 +321,7 @@ export default function App() {
       .catch(err => { console.error(err); showToast("⚠️ Failed: " + (err.message || "unknown")); });
   };
 
+  // ── Derived data ───────────────────────────────────────────────────
   const expList = Object.entries(expenses).map(([id, e]) => ({ id, ...e }));
   const payList = Object.entries(payments).map(([id, p]) => ({ id, ...p }));
   const shared = expList.filter(e => e.type === "shared");
@@ -258,13 +330,12 @@ export default function App() {
   const tsc = shared.reduce((s, e) => s + (e.totalCost || 0), 0);
   const bp = shared.reduce((s, e) => e.paidBy === "Bride" ? s + (e.amountPaid || 0) : e.paidBy === "Both" ? s + (e.amountPaid || 0) / 2 : s, 0);
   const gp = shared.reduce((s, e) => e.paidBy === "Groom" ? s + (e.amountPaid || 0) : e.paidBy === "Both" ? s + (e.amountPaid || 0) / 2 : s, 0);
-  // Personal: track both total committed cost and amount actually paid
   const bptCost = brideP.reduce((s, e) => s + (e.totalCost || e.amountPaid || 0), 0);
   const gptCost = groomP.reduce((s, e) => s + (e.totalCost || e.amountPaid || 0), 0);
   const bpt = brideP.reduce((s, e) => s + (e.amountPaid || 0), 0);
   const gpt = groomP.reduce((s, e) => s + (e.amountPaid || 0), 0);
-  const ts = bp + gp + bpt + gpt;           // total actually paid
-  const totalCommitted = tsc + bptCost + gptCost;  // total committed (for budget tracking)
+  const ts = bp + gp + bpt + gpt;
+  const totalCommitted = tsc + bptCost + gptCost;
   const rem = budget - totalCommitted;
   const sett = bp / 2 - gp / 2;
 
@@ -276,10 +347,13 @@ export default function App() {
     catS[cat] = { shared: sc, brideP: bc, groomP: gc, total: sc + bc + gc, budget: categories[cat] };
   });
 
+  // Untagged count for nudge banner
+  const untaggedCount = expList.filter(e => !e.event).length;
+
   if (loading) return (
-    <div style={{ display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:C.bg }}>
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:`linear-gradient(180deg, ${C.bg} 0%, ${C.bg2} 100%)` }}>
       <div style={{ textAlign:"center" }}>
-        <div style={{ fontSize:48, marginBottom:12 }}>💍</div>
+        <div style={{ fontSize:52, marginBottom:14 }}>💍</div>
         <div className="serif" style={{ fontSize:18, color:C.inkSoft, letterSpacing:1.5 }}>Connecting...</div>
       </div>
     </div>
@@ -292,25 +366,21 @@ export default function App() {
       <style>{css}</style>
       {toast && <div className="toast-msg">{toast}</div>}
 
-      {/* Header */}
       <Header conn={conn} onSettings={() => setShowSettings(true)} />
 
-      {/* Tab Content */}
       <div style={{ padding:"0 0 84px" }}>
-        {tab==="dashboard" && <DashTab budget={budget} ts={ts} rem={rem} tsc={tsc} sett={sett} bp={bp} gp={gp} bsh={tsc/2} bpt={bpt} gpt={gpt} bptCost={bptCost} gptCost={gptCost} brideP={brideP} groomP={groomP} catS={catS} payList={payList} />}
+        {tab==="dashboard" && <DashTab budget={budget} ts={ts} rem={rem} tsc={tsc} sett={sett} bp={bp} gp={gp} bpt={bpt} gpt={gpt} bptCost={bptCost} gptCost={gptCost} shared={shared} brideP={brideP} groomP={groomP} catS={catS} payList={payList} untaggedCount={untaggedCount} onGoExpenses={()=>setTab("expenses")} />}
         {tab==="expenses" && <ExpTab exps={expList} onAdd={()=>{setEditExp(null);setShowExpForm(true);}} onEdit={e=>{setEditExp(e);setShowExpForm(true);}} onDel={id=>{if(window.confirm("Delete this expense?")) delExp(id);}} />}
         {tab==="vendors" && <VendorsTab expList={expList} payList={payList} />}
         {tab==="upcoming" && <UpcomingTab payList={payList} onAdd={()=>{setEditPay(null);setShowPayForm(true);}} onEdit={p=>{setEditPay(p);setShowPayForm(true);}} onDel={id=>{if(window.confirm("Delete this scheduled payment?")) delPay(id);}} onMarkPaid={markPayAsPaid} />}
         {tab==="insights" && <InsTab data={{expList, payList, shared, brideP, groomP, tsc, bp, gp, bpt, gpt, bptCost, gptCost, ts, rem, sett, budget, catS}} onExport={doExport} />}
       </div>
 
-      {/* Modals */}
       {showExpForm && <ExpModal cats={Object.keys(categories)} init={editExp} onSave={d => { editExp ? updExp(editExp.id, d) : addExp(d); setShowExpForm(false); setEditExp(null); }} onClose={() => { setShowExpForm(false); setEditExp(null); }} />}
       {showPayForm && <PayModal cats={Object.keys(categories)} init={editPay} onSave={d => { editPay ? updPay(editPay.id, d) : addPay(d); setShowPayForm(false); setEditPay(null); }} onClose={() => { setShowPayForm(false); setEditPay(null); }} />}
       {showSettings && <SettingsModal budget={budget} saveBudget={saveBudget} categories={categories} saveCats={saveCats} catS={catS} showToast={showToast} onExport={doExport} onClose={() => setShowSettings(false)} />}
 
-      {/* Bottom Nav — 5 tabs */}
-      <div style={{ position:"fixed", bottom:0, left:0, right:0, background:"rgba(251,246,238,0.96)", backdropFilter:"blur(14px)", borderTop:`1px solid ${C.borderLight}`, display:"flex", justifyContent:"space-around", padding:"8px 0 12px", zIndex:50 }}>
+      <div style={{ position:"fixed", bottom:0, left:0, right:0, background:"rgba(251,246,238,0.97)", backdropFilter:"blur(16px)", borderTop:`1px solid ${C.borderLight}`, display:"flex", justifyContent:"space-around", padding:"8px 0 12px", zIndex:50, boxShadow:"0 -2px 20px rgba(43,32,24,0.04)" }}>
         {[
           { id:"dashboard", icon:"◈", label:"Home" },
           { id:"expenses", icon:"◎", label:"Expenses" },
@@ -321,7 +391,7 @@ export default function App() {
           <button key={t.id} className="tab-btn" onClick={() => setTab(t.id)} style={{ color: tab===t.id ? C.brand : C.inkFaint, fontWeight: tab===t.id ? 700 : 500 }}>
             <span style={{ fontSize:20, lineHeight:1 }}>{t.icon}</span>
             <span style={{ fontSize:10, letterSpacing:0.3 }}>{t.label}</span>
-            {tab===t.id && <div style={{ width:4, height:4, borderRadius:"50%", background:C.goldSoft, marginTop:1 }} />}
+            {tab===t.id && <div style={{ width:5, height:5, borderRadius:"50%", background:C.goldSoft, marginTop:1, boxShadow:`0 0 6px ${C.goldSoft}` }} />}
           </button>
         ))}
       </div>
@@ -334,27 +404,35 @@ export default function App() {
    ═══════════════════════════════════════════════════════════════════════ */
 function Header({ conn, onSettings }) {
   return (
-    <div style={{ background:`linear-gradient(135deg, ${C.ink} 0%, #4A3A2D 100%)`, padding:"22px 20px 18px", color:"white", position:"relative", overflow:"hidden" }}>
-      <div style={{ position:"absolute", top:-30, right:-30, width:140, height:140, borderRadius:"50%", background:"rgba(212,175,55,0.08)" }} />
-      <div style={{ position:"absolute", bottom:-40, left:-20, width:100, height:100, borderRadius:"50%", background:"rgba(196,144,139,0.12)" }} />
+    <div style={{ background:`linear-gradient(135deg, ${C.ink} 0%, ${C.brandDeep} 100%)`, padding:"22px 18px 18px", color:"white", position:"relative", overflow:"hidden" }}>
+      {/* Decorative gold blobs */}
+      <div style={{ position:"absolute", top:-40, right:-40, width:160, height:160, borderRadius:"50%", background:`radial-gradient(circle, rgba(212,175,55,0.18) 0%, transparent 70%)` }} />
+      <div style={{ position:"absolute", bottom:-50, left:-30, width:120, height:120, borderRadius:"50%", background:`radial-gradient(circle, rgba(196,144,139,0.15) 0%, transparent 70%)` }} />
+
       <div style={{ position:"relative", display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
         <div>
-          <div className="serif" style={{ fontSize:28, fontWeight:600, letterSpacing:0.3, marginBottom:3, display:"flex", alignItems:"center", gap:10 }}>
-            <span>Wedding Planner</span>
+          <div className="serif" style={{ fontSize:26, fontWeight:600, letterSpacing:0.3, marginBottom:3, display:"flex", alignItems:"center", gap:10 }}>
+            <span>Sanjana & Akhil</span>
             <span title={conn === "connected" ? "Synced" : "Offline"} style={{ fontSize:9, fontFamily:"'Inter',sans-serif", fontWeight:700, letterSpacing:0.8, padding:"3px 8px", borderRadius:10, display:"inline-flex", alignItems:"center", gap:5, background: conn==="connected"?"rgba(168,181,160,0.25)":"rgba(255,180,180,0.2)", border: `1px solid ${conn==="connected"?"rgba(168,181,160,0.5)":"rgba(255,180,180,0.4)"}`, color: conn==="connected"?"#D4F0D0":"#FFD0D0" }}>
-              <span style={{ width:6, height:6, borderRadius:"50%", background: conn==="connected"?C.sageSoft:"#E8A8A8", animation: conn==="connected"?"none":"pulse 1.5s ease infinite" }} />
+              <span style={{ width:6, height:6, borderRadius:"50%", background: conn==="connected"?C.greenSoft:"#E8A8A8", animation: conn==="connected"?"none":"pulse 1.5s ease infinite" }} />
               {conn === "connected" ? "SYNCED" : "OFFLINE"}
             </span>
           </div>
-          <div style={{ fontSize:11, opacity:0.7, letterSpacing:1.8, textTransform:"uppercase", fontWeight:500 }}>Sanjana & Akhil</div>
+          <div style={{ fontSize:11, opacity:0.7, letterSpacing:1.8, textTransform:"uppercase", fontWeight:500 }}>Wedding Planner · 2026</div>
         </div>
-        <button onClick={onSettings} aria-label="Settings" style={{ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.15)", color:"white", padding:"8px 10px", borderRadius:10, cursor:"pointer", fontSize:16 }}>⚙</button>
+        <button onClick={onSettings} aria-label="Settings" style={{ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.15)", color:"white", padding:"8px 10px", borderRadius:10, cursor:"pointer", fontSize:16, transition:"transform 0.15s, background 0.2s" }} onMouseDown={e=>e.currentTarget.style.transform="scale(0.94)"} onMouseUp={e=>e.currentTarget.style.transform="scale(1)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>⚙</button>
       </div>
-      <div style={{ display:"flex", gap:8, marginTop:14, position:"relative" }}>
-        {[{ l:"Engagement", d:ENGAGEMENT_DATE, e:"💍" }, { l:"Wedding", d:WEDDING_DATE, e:"🎊" }].map((ev,i) => (
-          <div key={i} style={{ flex:1, background:"rgba(255,255,255,0.10)", borderRadius:12, padding:"10px 14px", border:"1px solid rgba(255,255,255,0.15)" }}>
-            <div style={{ fontSize:10, opacity:0.75, textTransform:"uppercase", letterSpacing:1.2, fontWeight:600 }}>{ev.e} {ev.l}</div>
-            <div className="serif" style={{ fontSize:17, fontWeight:600, marginTop:3 }}>{countdown(ev.d)}</div>
+
+      {/* Three event countdowns */}
+      <div style={{ display:"flex", gap:6, marginTop:14, position:"relative" }}>
+        {[
+          { l:"Engagement", d:ENGAGEMENT_DATE, e:"💍", color:C.goldBright },
+          { l:"Wedding",    d:WEDDING_DATE,    e:"🎊", color:C.brandSoft },
+          { l:"Reception",  d:RECEPTION_DATE,  e:"🥂", color:"#C19BD0" },
+        ].map((ev,i) => (
+          <div key={i} className="fade-up" style={{ flex:1, background:"rgba(255,255,255,0.10)", borderRadius:12, padding:"10px 10px", border:"1px solid rgba(255,255,255,0.15)", animationDelay:`${i*0.05}s` }}>
+            <div style={{ fontSize:9, opacity:0.75, textTransform:"uppercase", letterSpacing:1, fontWeight:600 }}>{ev.e} {ev.l}</div>
+            <div className="serif" style={{ fontSize:15, fontWeight:600, marginTop:3, color:ev.color }}>{countdown(ev.d)}</div>
           </div>
         ))}
       </div>
@@ -365,55 +443,61 @@ function Header({ conn, onSettings }) {
 /* ═══════════════════════════════════════════════════════════════════════
    DASHBOARD TAB
    ═══════════════════════════════════════════════════════════════════════ */
-function DashTab({ budget, ts, rem, tsc, sett, bp, gp, bsh, bpt, gpt, bptCost, gptCost, brideP, groomP, catS, payList }) {
+function DashTab({ budget, ts, rem, tsc, sett, bp, gp, bpt, gpt, bptCost, gptCost, shared, brideP, groomP, catS, payList, untaggedCount, onGoExpenses }) {
   const pct = budget > 0 ? Math.min((ts / budget) * 100, 100) : 0;
   const upcoming = payList.filter(p => p.status !== "Paid").sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate)).slice(0, 3);
-  const bDue = (bptCost || 0) - (bpt || 0);
-  const gDue = (gptCost || 0) - (gpt || 0);
-  const [personalExpanded, setPersonalExpanded] = useState(false);
-  const totalPersonal = bpt + gpt;
-  const sPct = totalPersonal > 0 ? (bpt / totalPersonal) * 100 : 50;
-  const aPct = totalPersonal > 0 ? (gpt / totalPersonal) * 100 : 50;
-  const recentBride = [...brideP].sort((a,b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt)).slice(0, 5);
-  const recentGroom = [...groomP].sort((a,b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt)).slice(0, 5);
 
   return (
     <div style={{ padding:16 }} className="fade-up">
+      {/* Untagged nudge */}
+      {untaggedCount > 0 && (
+        <div className="slide-in" onClick={onGoExpenses} style={{ cursor:"pointer", background:`linear-gradient(135deg, ${C.goldBg}, ${C.bgWarm})`, border:`1px solid ${C.goldSoft}`, borderRadius:14, padding:"12px 14px", marginBottom:14, display:"flex", alignItems:"center", gap:12 }}>
+          <span style={{ fontSize:20 }}>🏷️</span>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:C.goldDeep }}>{untaggedCount} expense{untaggedCount!==1?"s":""} need an event tag</div>
+            <div style={{ fontSize:11, color:C.inkSoft, marginTop:2 }}>Tap to open Expenses and edit them</div>
+          </div>
+          <span style={{ color:C.goldDeep, fontSize:14 }}>→</span>
+        </div>
+      )}
+
+      {/* KPI cards */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
-        <KpiCard label="Budget" value={fmtL(budget)} bg={`linear-gradient(135deg, ${C.ink}, #4A3A2D)`} />
-        <KpiCard label="Spent" value={fmtL(ts)} bg={`linear-gradient(135deg, ${C.rose}, ${C.roseSoft})`} />
-        <KpiCard label="Remaining" value={fmtL(rem)} bg={`linear-gradient(135deg, ${C.sage}, ${C.sageSoft})`} neg={rem<0} />
-        <KpiCard label="Shared" value={fmtL(tsc)} bg={`linear-gradient(135deg, ${C.brand}, ${C.brandSoft})`} />
+        <KpiCard label="Budget" value={fmtL(budget)} bg={`linear-gradient(135deg, ${C.ink}, ${C.brandDeep})`} delay={0} />
+        <KpiCard label="Spent" value={fmtL(ts)} bg={`linear-gradient(135deg, ${C.rose}, ${C.roseSoft})`} delay={0.05} />
+        <KpiCard label="Remaining" value={fmtL(rem)} bg={`linear-gradient(135deg, ${C.green}, ${C.greenSoft})`} neg={rem<0} delay={0.1} />
+        <KpiCard label="Shared" value={fmtL(tsc)} bg={`linear-gradient(135deg, ${C.brand}, ${C.brandSoft})`} delay={0.15} />
       </div>
 
-      <div className="card">
+      <div className="card slide-in" style={{ animationDelay:"0.2s" }}>
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
           <span style={{ fontSize:13, fontWeight:600, color:C.inkSoft }}>Budget Used</span>
-          <span className="serif" style={{ fontSize:16, fontWeight:600, color: pct>90 ? C.red : C.sage }}>{pct.toFixed(1)}%</span>
+          <span className="serif" style={{ fontSize:16, fontWeight:600, color: pct>90 ? C.red : C.green }}>{pct.toFixed(1)}%</span>
         </div>
-        <div style={{ height:8, background:C.borderLight, borderRadius:4, overflow:"hidden" }}>
-          <div style={{ height:"100%", borderRadius:4, transition:"width 0.6s", width:`${pct}%`, background: pct>90 ? `linear-gradient(90deg, ${C.brand}, ${C.red})` : `linear-gradient(90deg, ${C.sageSoft}, ${C.sage})` }} />
+        <div style={{ height:10, background:C.borderLight, borderRadius:5, overflow:"hidden" }}>
+          <div style={{ height:"100%", borderRadius:5, transition:"width 0.8s cubic-bezier(0.16, 1, 0.3, 1)", width:`${pct}%`, background: pct>90 ? `linear-gradient(90deg, ${C.brand}, ${C.red})` : `linear-gradient(90deg, ${C.goldBright}, ${C.gold})` }} />
         </div>
       </div>
 
       {/* Settlement */}
-      <div style={{ background:`linear-gradient(135deg, ${C.brand}, ${C.brandSoft})`, borderRadius:16, padding:20, marginBottom:14, color:"white", boxShadow:"0 6px 20px rgba(155,85,54,0.25)" }}>
-        <div style={{ fontSize:11, textTransform:"uppercase", letterSpacing:1.5, opacity:0.85, marginBottom:8, fontWeight:600 }}>Settlement</div>
-        <div className="serif" style={{ fontSize:26, fontWeight:600, marginBottom:6, lineHeight:1.2 }}>
+      <div className="slide-in" style={{ background:`linear-gradient(135deg, ${C.brand}, ${C.brandSoft})`, borderRadius:18, padding:22, marginBottom:14, color:"white", boxShadow:"0 8px 28px rgba(155,85,54,0.28)", position:"relative", overflow:"hidden", animationDelay:"0.25s" }}>
+        <div style={{ position:"absolute", top:-30, right:-20, width:120, height:120, borderRadius:"50%", background:"radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%)" }} />
+        <div style={{ fontSize:11, textTransform:"uppercase", letterSpacing:1.5, opacity:0.85, marginBottom:8, fontWeight:600, position:"relative" }}>Settlement</div>
+        <div className="serif" style={{ fontSize:26, fontWeight:600, marginBottom:6, lineHeight:1.2, position:"relative" }}>
           {Math.abs(sett)<1 ? "All Settled ✓" : sett>0 ? `Akhil owes ${fmtFull(sett)}` : `Sanjana owes ${fmtFull(Math.abs(sett))}`}
         </div>
-        <div style={{ fontSize:12, opacity:0.85, lineHeight:1.5 }}>
+        <div style={{ fontSize:12, opacity:0.88, lineHeight:1.5, position:"relative" }}>
           Sanjana paid {fmtL(bp)} · Akhil paid {fmtL(gp)} toward shared
         </div>
-        <div style={{ display:"flex", gap:8, marginTop:14 }}>
-          <MS label="Sanjana's share" value={fmtL(bsh)} />
-          <MS label="Akhil's share" value={fmtL(bsh)} />
+        <div style={{ display:"flex", gap:8, marginTop:14, position:"relative" }}>
+          <MS label="Sanjana's share" value={fmtL(tsc/2)} />
+          <MS label="Akhil's share" value={fmtL(tsc/2)} />
         </div>
       </div>
 
-      {/* Upcoming Payments Alert */}
+      {/* Upcoming */}
       {upcoming.length > 0 && (
-        <div className="card" style={{ borderLeft:`4px solid ${C.amber}` }}>
+        <div className="card slide-in" style={{ borderLeft:`4px solid ${C.amber}`, animationDelay:"0.3s" }}>
           <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
             <span style={{ fontSize:13, fontWeight:700, color:C.ink }}>⏰ Upcoming Payments</span>
             <span style={{ fontSize:11, color:C.inkSoft }}>Next {upcoming.length}</span>
@@ -428,6 +512,7 @@ function DashTab({ budget, ts, rem, tsc, sett, bp, gp, bsh, bpt, gpt, bptCost, g
                   <div style={{ fontSize:13, fontWeight:600, color:C.ink }}>{p.vendor || p.title}</div>
                   <div style={{ fontSize:11, color: overdue ? C.red : urgent ? C.amber : C.inkSoft, fontWeight: (overdue||urgent) ? 600 : 400 }}>
                     {fmtDateShort(p.dueDate)} · {overdue ? `${Math.abs(days)}d overdue` : days === 0 ? "Due today" : `${days}d to go`}
+                    {p.event && ` · ${eventLabel(p.event)}`}
                   </div>
                 </div>
                 <div className="serif" style={{ fontSize:15, fontWeight:600, color:C.ink }}>{fmtL(p.amount)}</div>
@@ -437,125 +522,26 @@ function DashTab({ budget, ts, rem, tsc, sett, bp, gp, bsh, bpt, gpt, bptCost, g
         </div>
       )}
 
-      {/* Personal Expenses — expandable */}
-      <div className="card" style={{ padding:0, overflow:"hidden", marginBottom:14 }}>
-        <button onClick={() => setPersonalExpanded(!personalExpanded)} style={{ width:"100%", background:"none", border:"none", padding:18, textAlign:"left", cursor:"pointer" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-            <div>
-              <div style={{ fontSize:11, color:C.inkSoft, textTransform:"uppercase", letterSpacing:1.2, fontWeight:600 }}>Personal Expenses</div>
-              <div className="serif" style={{ fontSize:22, fontWeight:600, color:C.ink, marginTop:2 }}>{fmtL(totalPersonal)}</div>
-            </div>
-            <div style={{ fontSize:18, color:C.inkFaint }}>{personalExpanded ? "▴" : "▾"}</div>
-          </div>
+      {/* SHARED card with event drill-down */}
+      <SharedDrillCard shared={shared} tsc={tsc} bp={bp} gp={gp} />
 
-          {/* Visual split bar */}
-          {totalPersonal > 0 ? (
-            <>
-              <div style={{ display:"flex", height:10, borderRadius:5, overflow:"hidden", background:C.borderLight, marginBottom:8 }}>
-                <div style={{ width:`${sPct}%`, background:`linear-gradient(90deg, ${C.roseSoft}, ${C.rose})`, transition:"width 0.5s" }} />
-                <div style={{ width:`${aPct}%`, background:`linear-gradient(90deg, ${C.sage}, ${C.sageSoft})`, transition:"width 0.5s" }} />
-              </div>
-              <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ width:8, height:8, borderRadius:"50%", background:C.rose }} />
-                  <span style={{ color:C.inkSoft, fontWeight:600 }}>Sanjana</span>
-                  <span className="serif" style={{ color:C.ink, fontWeight:600 }}>{fmtL(bpt)}</span>
-                  <span style={{ color:C.inkFaint }}>({sPct.toFixed(0)}%)</span>
-                </div>
-                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ color:C.inkFaint }}>({aPct.toFixed(0)}%)</span>
-                  <span className="serif" style={{ color:C.ink, fontWeight:600 }}>{fmtL(gpt)}</span>
-                  <span style={{ color:C.inkSoft, fontWeight:600 }}>Akhil</span>
-                  <span style={{ width:8, height:8, borderRadius:"50%", background:C.sage }} />
-                </div>
-              </div>
-            </>
-          ) : (
-            <div style={{ fontSize:12, color:C.inkFaint, fontStyle:"italic" }}>No personal expenses logged yet</div>
-          )}
-        </button>
-
-        {personalExpanded && (
-          <div style={{ borderTop:`1px solid ${C.borderLight}`, padding:18, background:C.bg }}>
-            {/* Sanjana details */}
-            <div style={{ marginBottom: groomP.length > 0 || bDue > 0 ? 20 : 0 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:10 }}>
-                <div>
-                  <div style={{ fontSize:11, color:C.rose, textTransform:"uppercase", letterSpacing:1.2, fontWeight:700 }}>✿ Sanjana</div>
-                  <div className="serif" style={{ fontSize:20, fontWeight:600, color:C.ink, marginTop:2 }}>{fmtL(bpt)}</div>
-                </div>
-                <div style={{ textAlign:"right", fontSize:11, color:C.inkSoft }}>
-                  <div>{brideP.length} expense{brideP.length !== 1 ? "s" : ""}</div>
-                  {bDue > 0 && <div style={{ color:C.amber, fontWeight:600, marginTop:2 }}>{fmtL(bDue)} due</div>}
-                  {bptCost > bpt && <div style={{ color:C.inkFaint, marginTop:2 }}>Total: {fmtL(bptCost)}</div>}
-                </div>
-              </div>
-              {recentBride.length > 0 ? (
-                <div style={{ background:"white", borderRadius:10, padding:"4px 12px", border:`1px solid ${C.borderLight}` }}>
-                  {recentBride.map(e => (
-                    <div key={e.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${C.borderLight}` }}>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:13, fontWeight:500, color:C.ink, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{e.title}</div>
-                        <div style={{ fontSize:11, color:C.inkSoft, marginTop:1 }}>{fmtDateShort(e.date)} · {e.category}{e.vendor ? ` · ${e.vendor}` : ""}</div>
-                      </div>
-                      <div className="serif" style={{ fontSize:14, fontWeight:600, color:C.ink, marginLeft:10 }}>{fmtL(e.amountPaid)}</div>
-                    </div>
-                  ))}
-                  {brideP.length > 5 && <div style={{ fontSize:11, color:C.inkFaint, padding:"6px 0", textAlign:"center", fontStyle:"italic" }}>+ {brideP.length - 5} more · View all in Expenses tab</div>}
-                </div>
-              ) : (
-                <div style={{ fontSize:12, color:C.inkFaint, fontStyle:"italic", padding:"8px 0" }}>No personal expenses yet</div>
-              )}
-            </div>
-
-            {/* Akhil details */}
-            <div>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:10 }}>
-                <div>
-                  <div style={{ fontSize:11, color:C.sage, textTransform:"uppercase", letterSpacing:1.2, fontWeight:700 }}>❖ Akhil</div>
-                  <div className="serif" style={{ fontSize:20, fontWeight:600, color:C.ink, marginTop:2 }}>{fmtL(gpt)}</div>
-                </div>
-                <div style={{ textAlign:"right", fontSize:11, color:C.inkSoft }}>
-                  <div>{groomP.length} expense{groomP.length !== 1 ? "s" : ""}</div>
-                  {gDue > 0 && <div style={{ color:C.amber, fontWeight:600, marginTop:2 }}>{fmtL(gDue)} due</div>}
-                  {gptCost > gpt && <div style={{ color:C.inkFaint, marginTop:2 }}>Total: {fmtL(gptCost)}</div>}
-                </div>
-              </div>
-              {recentGroom.length > 0 ? (
-                <div style={{ background:"white", borderRadius:10, padding:"4px 12px", border:`1px solid ${C.borderLight}` }}>
-                  {recentGroom.map(e => (
-                    <div key={e.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${C.borderLight}` }}>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:13, fontWeight:500, color:C.ink, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{e.title}</div>
-                        <div style={{ fontSize:11, color:C.inkSoft, marginTop:1 }}>{fmtDateShort(e.date)} · {e.category}{e.vendor ? ` · ${e.vendor}` : ""}</div>
-                      </div>
-                      <div className="serif" style={{ fontSize:14, fontWeight:600, color:C.ink, marginLeft:10 }}>{fmtL(e.amountPaid)}</div>
-                    </div>
-                  ))}
-                  {groomP.length > 5 && <div style={{ fontSize:11, color:C.inkFaint, padding:"6px 0", textAlign:"center", fontStyle:"italic" }}>+ {groomP.length - 5} more · View all in Expenses tab</div>}
-                </div>
-              ) : (
-                <div style={{ fontSize:12, color:C.inkFaint, fontStyle:"italic", padding:"8px 0" }}>No personal expenses yet</div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+      {/* PERSONAL card with 3-level drill */}
+      <PersonalDrillCard brideP={brideP} groomP={groomP} bpt={bpt} gpt={gpt} bptCost={bptCost} gptCost={gptCost} />
 
       {/* Categories */}
-      <div className="card">
+      <div className="card slide-in" style={{ animationDelay:"0.45s" }}>
         <div style={{ fontSize:14, fontWeight:700, color:C.ink, marginBottom:14 }}>Category Breakdown</div>
         {Object.entries(catS).map(([cat, d], i) => {
           const p = d.budget > 0 ? Math.min((d.total/d.budget)*100, 100) : 0;
           const ov = d.total > d.budget && d.budget > 0;
           return (
-            <div key={cat} className="slide-in" style={{ marginBottom:14, animationDelay:`${i*.03}s` }}>
+            <div key={cat} className="slide-in" style={{ marginBottom:14, animationDelay:`${0.5 + i*.03}s` }}>
               <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
                 <span style={{ fontSize:13, fontWeight:500, color: ov ? C.red : C.ink }}>{cat}</span>
                 <span style={{ fontSize:12, color:C.inkSoft, fontWeight:500 }}>{fmtL(d.total)} / {fmtL(d.budget)}</span>
               </div>
               <div style={{ height:6, background:C.borderLight, borderRadius:3, overflow:"hidden" }}>
-                <div style={{ height:"100%", borderRadius:3, transition:"width .5s", width:`${p}%`, background: ov ? C.red : p>75 ? C.brand : C.sageSoft }} />
+                <div style={{ height:"100%", borderRadius:3, transition:"width 0.6s cubic-bezier(0.16, 1, 0.3, 1)", width:`${p}%`, background: ov ? C.red : p>75 ? `linear-gradient(90deg, ${C.gold}, ${C.brand})` : `linear-gradient(90deg, ${C.greenSoft}, ${C.green})` }} />
               </div>
             </div>
           );
@@ -565,19 +551,217 @@ function DashTab({ budget, ts, rem, tsc, sett, bp, gp, bsh, bpt, gpt, bptCost, g
   );
 }
 
-function KpiCard({ label, value, bg, neg }) {
+function KpiCard({ label, value, bg, neg, delay=0 }) {
   return (
-    <div style={{ background:bg, borderRadius:14, padding:"14px 16px", color:"white", boxShadow:"0 4px 12px rgba(0,0,0,0.08)" }}>
-      <div style={{ fontSize:10, textTransform:"uppercase", letterSpacing:1.2, opacity:0.85, fontWeight:600 }}>{label}</div>
-      <div className="serif" style={{ fontSize:22, fontWeight:600, marginTop:4, color: neg ? "#FFC4C4" : "white" }}>{value}</div>
+    <div className="slide-in" style={{ background:bg, borderRadius:14, padding:"14px 16px", color:"white", boxShadow:"0 6px 18px rgba(0,0,0,0.10)", animationDelay:`${delay}s`, position:"relative", overflow:"hidden" }}>
+      <div style={{ position:"absolute", top:-15, right:-15, width:60, height:60, borderRadius:"50%", background:"radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%)" }} />
+      <div style={{ fontSize:10, textTransform:"uppercase", letterSpacing:1.2, opacity:0.85, fontWeight:600, position:"relative" }}>{label}</div>
+      <div className="serif" style={{ fontSize:22, fontWeight:600, marginTop:4, color: neg ? "#FFC4C4" : "white", position:"relative" }}>{value}</div>
     </div>
   );
 }
 function MS({ label, value }) {
   return (
-    <div style={{ flex:1, background:"rgba(255,255,255,0.15)", borderRadius:8, padding:"7px 10px" }}>
-      <div style={{ fontSize:10, opacity:0.8, fontWeight:500 }}>{label}</div>
+    <div style={{ flex:1, background:"rgba(255,255,255,0.16)", borderRadius:8, padding:"7px 10px", backdropFilter:"blur(8px)" }}>
+      <div style={{ fontSize:10, opacity:0.85, fontWeight:500 }}>{label}</div>
       <div style={{ fontSize:14, fontWeight:700 }}>{value}</div>
+    </div>
+  );
+}
+
+/* SHARED drill card — Shared > by event > expenses */
+function SharedDrillCard({ shared, tsc, bp, gp }) {
+  const [open, setOpen] = useState(false);
+  const [openEvent, setOpenEvent] = useState(null);
+  const eventBuckets = {};
+  EVENTS.concat([UNCATEGORIZED]).forEach(ev => {
+    const id = ev.id === "uncategorized" ? null : ev.id;
+    const items = shared.filter(e => (e.event || null) === id);
+    if (items.length > 0) {
+      const totalCost = items.reduce((s, e) => s + (e.totalCost || 0), 0);
+      const paid = items.reduce((s, e) => s + (e.amountPaid || 0), 0);
+      eventBuckets[ev.id] = { ...ev, items, totalCost, paid };
+    }
+  });
+
+  return (
+    <div className="card slide-in" style={{ padding:0, overflow:"hidden", marginBottom:14, animationDelay:"0.35s" }}>
+      <button onClick={() => setOpen(!open)} className="card-press" style={{ width:"100%", background:"none", border:"none", padding:18, textAlign:"left", cursor:"pointer" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div>
+            <div style={{ fontSize:11, color:C.brand, textTransform:"uppercase", letterSpacing:1.2, fontWeight:700 }}>🤝 Shared Expenses</div>
+            <div className="serif" style={{ fontSize:22, fontWeight:600, color:C.ink, marginTop:3 }}>{fmtL(tsc)}</div>
+            <div style={{ fontSize:11, color:C.inkSoft, marginTop:2 }}>{shared.length} expense{shared.length!==1?"s":""} · Paid: {fmtL(bp+gp)}</div>
+          </div>
+          <span className={`chevron ${open?"open":""}`}>▾</span>
+        </div>
+      </button>
+
+      {open && (
+        <div className="expand-down" style={{ borderTop:`1px solid ${C.borderLight}`, padding:14, background:C.bgWarm }}>
+          {Object.keys(eventBuckets).length === 0 ? (
+            <div style={{ fontSize:12, color:C.inkFaint, fontStyle:"italic", padding:"8px 0", textAlign:"center" }}>No shared expenses</div>
+          ) : Object.values(eventBuckets).map((b, i) => {
+            const isOpen = openEvent === b.id;
+            const ec = eventColor(b.id === "uncategorized" ? null : b.id);
+            return (
+              <div key={b.id} className="slide-in" style={{ marginBottom:10, animationDelay:`${i*0.05}s` }}>
+                <button onClick={() => setOpenEvent(isOpen ? null : b.id)} className="card-press" style={{ width:"100%", background:"white", border:`1px solid ${C.borderLight}`, borderLeft:`4px solid ${ec.c}`, borderRadius:10, padding:"10px 14px", textAlign:"left", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:600, color:C.ink }}>{b.emoji} {b.label}</div>
+                    <div style={{ fontSize:11, color:C.inkSoft, marginTop:2 }}>{b.items.length} expense{b.items.length!==1?"s":""}{b.totalCost !== b.paid ? ` · Paid ${fmtL(b.paid)}` : ""}</div>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <div className="serif" style={{ fontSize:15, fontWeight:600, color:C.ink }}>{fmtL(b.totalCost)}</div>
+                    <span className={`chevron ${isOpen?"open":""}`} style={{ fontSize:12 }}>▾</span>
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="expand-down" style={{ marginTop:6, background:"white", border:`1px solid ${C.borderLight}`, borderRadius:10, padding:"4px 12px" }}>
+                    {[...b.items].sort((a,b2)=>new Date(b2.date||b2.createdAt)-new Date(a.date||a.createdAt)).map(e => (
+                      <div key={e.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${C.borderLight}` }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight:500, color:C.ink, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{e.title}</div>
+                          <div style={{ fontSize:11, color:C.inkSoft, marginTop:1 }}>{fmtDateShort(e.date)} · {e.category}{e.vendor ? ` · ${e.vendor}` : ""} · Paid by {dn(e.paidBy)}</div>
+                        </div>
+                        <div className="serif" style={{ fontSize:14, fontWeight:600, color:C.ink, marginLeft:10 }}>{fmtL(e.totalCost || e.amountPaid)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* PERSONAL drill card — Personal > by person > by event > expenses */
+function PersonalDrillCard({ brideP, groomP, bpt, gpt, bptCost, gptCost }) {
+  const [open, setOpen] = useState(false);
+  const [openPerson, setOpenPerson] = useState(null);
+  const [openEvent, setOpenEvent] = useState(null);
+  const totalPersonal = bpt + gpt;
+  const sPct = totalPersonal > 0 ? (bpt / totalPersonal) * 100 : 50;
+  const aPct = totalPersonal > 0 ? (gpt / totalPersonal) * 100 : 50;
+  const bDue = bptCost - bpt;
+  const gDue = gptCost - gpt;
+
+  const bucketByEvent = (list) => {
+    const out = {};
+    EVENTS.concat([UNCATEGORIZED]).forEach(ev => {
+      const id = ev.id === "uncategorized" ? null : ev.id;
+      const items = list.filter(e => (e.event || null) === id);
+      if (items.length > 0) {
+        out[ev.id] = { ...ev, items, paid: items.reduce((s, e) => s + (e.amountPaid || 0), 0), totalCost: items.reduce((s, e) => s + (e.totalCost || e.amountPaid || 0), 0) };
+      }
+    });
+    return out;
+  };
+  const brideBuckets = bucketByEvent(brideP);
+  const groomBuckets = bucketByEvent(groomP);
+
+  const personSection = (key, name, color, colorBg, paid, due, totalCost, count, buckets) => {
+    const isPersonOpen = openPerson === key;
+    return (
+      <div className="slide-in" style={{ marginBottom:10 }}>
+        <button onClick={() => { setOpenPerson(isPersonOpen ? null : key); setOpenEvent(null); }} className="card-press" style={{ width:"100%", background:"white", border:`1px solid ${C.borderLight}`, borderLeft:`4px solid ${color}`, borderRadius:10, padding:"12px 14px", textAlign:"left", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div>
+            <div style={{ fontSize:13, fontWeight:700, color, textTransform:"uppercase", letterSpacing:0.8 }}>{name}</div>
+            <div style={{ fontSize:11, color:C.inkSoft, marginTop:3 }}>{count} expense{count!==1?"s":""}{due > 0 ? ` · ${fmtL(due)} due` : ""}</div>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <div style={{ textAlign:"right" }}>
+              <div className="serif" style={{ fontSize:17, fontWeight:600, color:C.ink }}>{fmtL(paid)}</div>
+              {totalCost > paid && <div style={{ fontSize:11, color:C.inkFaint }}>of {fmtL(totalCost)}</div>}
+            </div>
+            <span className={`chevron ${isPersonOpen?"open":""}`} style={{ fontSize:12 }}>▾</span>
+          </div>
+        </button>
+
+        {isPersonOpen && (
+          <div className="expand-down" style={{ marginTop:6, paddingLeft:8 }}>
+            {Object.keys(buckets).length === 0 ? (
+              <div style={{ fontSize:12, color:C.inkFaint, fontStyle:"italic", padding:"8px 12px" }}>No expenses</div>
+            ) : Object.values(buckets).map((b, i) => {
+              const isEvOpen = openEvent === `${key}:${b.id}`;
+              const ec = eventColor(b.id === "uncategorized" ? null : b.id);
+              return (
+                <div key={b.id} className="slide-in" style={{ marginBottom:6, animationDelay:`${i*0.04}s` }}>
+                  <button onClick={() => setOpenEvent(isEvOpen ? null : `${key}:${b.id}`)} className="card-press" style={{ width:"100%", background:colorBg, border:`1px solid ${C.borderLight}`, borderLeft:`3px solid ${ec.c}`, borderRadius:8, padding:"8px 12px", textAlign:"left", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <div>
+                      <div style={{ fontSize:12, fontWeight:600, color:C.ink }}>{b.emoji} {b.label}</div>
+                      <div style={{ fontSize:10, color:C.inkSoft, marginTop:1 }}>{b.items.length} expense{b.items.length!==1?"s":""}</div>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <div className="serif" style={{ fontSize:13, fontWeight:600, color:C.ink }}>{fmtL(b.paid)}</div>
+                      <span className={`chevron ${isEvOpen?"open":""}`} style={{ fontSize:11 }}>▾</span>
+                    </div>
+                  </button>
+                  {isEvOpen && (
+                    <div className="expand-down" style={{ marginTop:4, background:"white", border:`1px solid ${C.borderLight}`, borderRadius:8, padding:"4px 12px" }}>
+                      {[...b.items].sort((a,b2)=>new Date(b2.date||b2.createdAt)-new Date(a.date||a.createdAt)).map(e => (
+                        <div key={e.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 0", borderBottom:`1px solid ${C.borderLight}` }}>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:12, fontWeight:500, color:C.ink, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{e.title}</div>
+                            <div style={{ fontSize:10, color:C.inkSoft, marginTop:1 }}>{fmtDateShort(e.date)} · {e.category}{e.vendor ? ` · ${e.vendor}` : ""}</div>
+                          </div>
+                          <div className="serif" style={{ fontSize:13, fontWeight:600, color:C.ink, marginLeft:8 }}>{fmtL(e.amountPaid)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="card slide-in" style={{ padding:0, overflow:"hidden", marginBottom:14, animationDelay:"0.4s" }}>
+      <button onClick={() => setOpen(!open)} className="card-press" style={{ width:"100%", background:"none", border:"none", padding:18, textAlign:"left", cursor:"pointer" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+          <div>
+            <div style={{ fontSize:11, color:C.inkSoft, textTransform:"uppercase", letterSpacing:1.2, fontWeight:700 }}>👤 Personal Expenses</div>
+            <div className="serif" style={{ fontSize:22, fontWeight:600, color:C.ink, marginTop:3 }}>{fmtL(totalPersonal)}</div>
+          </div>
+          <span className={`chevron ${open?"open":""}`}>▾</span>
+        </div>
+        {totalPersonal > 0 ? (
+          <>
+            <div style={{ display:"flex", height:10, borderRadius:5, overflow:"hidden", background:C.borderLight, marginBottom:8 }}>
+              <div style={{ width:`${sPct}%`, background:`linear-gradient(90deg, ${C.roseSoft}, ${C.rose})`, transition:"width 0.6s cubic-bezier(0.16, 1, 0.3, 1)" }} />
+              <div style={{ width:`${aPct}%`, background:`linear-gradient(90deg, ${C.green}, ${C.greenSoft})`, transition:"width 0.6s cubic-bezier(0.16, 1, 0.3, 1)" }} />
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <span style={{ width:8, height:8, borderRadius:"50%", background:C.rose }} />
+                <span style={{ color:C.inkSoft, fontWeight:600 }}>Sanjana</span>
+                <span className="serif" style={{ color:C.ink, fontWeight:600 }}>{fmtL(bpt)}</span>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <span className="serif" style={{ color:C.ink, fontWeight:600 }}>{fmtL(gpt)}</span>
+                <span style={{ color:C.inkSoft, fontWeight:600 }}>Akhil</span>
+                <span style={{ width:8, height:8, borderRadius:"50%", background:C.green }} />
+              </div>
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize:12, color:C.inkFaint, fontStyle:"italic" }}>No personal expenses yet</div>
+        )}
+      </button>
+
+      {open && (
+        <div className="expand-down" style={{ borderTop:`1px solid ${C.borderLight}`, padding:14, background:C.bgWarm }}>
+          {personSection("bride", "✿ Sanjana", C.rose, C.roseBg, bpt, bDue, bptCost, brideP.length, brideBuckets)}
+          {personSection("groom", "❖ Akhil", C.green, C.greenBg, gpt, gDue, gptCost, groomP.length, groomBuckets)}
+        </div>
+      )}
     </div>
   );
 }
@@ -587,12 +771,15 @@ function MS({ label, value }) {
    ═══════════════════════════════════════════════════════════════════════ */
 function ExpTab({ exps, onAdd, onEdit, onDel }) {
   const [filter, setFilter] = useState("all");
+  const [eventFilter, setEventFilter] = useState("all");
   const [search, setSearch] = useState("");
 
   const filtered = exps.filter(e => {
     if (filter === "shared" && e.type !== "shared") return false;
     if (filter === "Bride" && !(e.type === "personal" && e.owner === "Bride")) return false;
     if (filter === "Groom" && !(e.type === "personal" && e.owner === "Groom")) return false;
+    if (eventFilter === "uncategorized" && e.event) return false;
+    if (eventFilter !== "all" && eventFilter !== "uncategorized" && e.event !== eventFilter) return false;
     if (search && !(e.title || "").toLowerCase().includes(search.toLowerCase()) && !(e.vendor || "").toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -600,10 +787,19 @@ function ExpTab({ exps, onAdd, onEdit, onDel }) {
 
   return (
     <div style={{ padding:16 }} className="fade-up">
+      {/* Type filter */}
       <div style={{ display:"flex", gap:6, marginBottom:10, overflowX:"auto", paddingBottom:4 }}>
         {[{id:"all",l:"All"},{id:"shared",l:"Shared"},{id:"Bride",l:"✿ Sanjana"},{id:"Groom",l:"❖ Akhil"}].map(x => (
-          <button key={x.id} onClick={()=>setFilter(x.id)} style={{ background: filter===x.id ? C.ink : "white", color: filter===x.id ? "white" : C.inkSoft, border:`1px solid ${C.border}`, borderRadius:20, padding:"6px 14px", fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" }}>{x.l}</button>
+          <button key={x.id} onClick={()=>setFilter(x.id)} style={{ background: filter===x.id ? C.ink : "white", color: filter===x.id ? "white" : C.inkSoft, border:`1px solid ${C.border}`, borderRadius:20, padding:"6px 14px", fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", transition:"all 0.2s" }}>{x.l}</button>
         ))}
+      </div>
+      {/* Event filter */}
+      <div style={{ display:"flex", gap:6, marginBottom:10, overflowX:"auto", paddingBottom:4 }}>
+        <button onClick={()=>setEventFilter("all")} style={{ background: eventFilter==="all" ? C.gold : "white", color: eventFilter==="all" ? "white" : C.inkSoft, border:`1px solid ${C.border}`, borderRadius:20, padding:"6px 14px", fontSize:11, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", transition:"all 0.2s" }}>All Events</button>
+        {EVENTS.map(ev => (
+          <button key={ev.id} onClick={()=>setEventFilter(ev.id)} style={{ background: eventFilter===ev.id ? eventColor(ev.id).c : "white", color: eventFilter===ev.id ? "white" : C.inkSoft, border:`1px solid ${C.border}`, borderRadius:20, padding:"6px 14px", fontSize:11, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", transition:"all 0.2s" }}>{ev.emoji} {ev.short}</button>
+        ))}
+        <button onClick={()=>setEventFilter("uncategorized")} style={{ background: eventFilter==="uncategorized" ? C.inkSoft : "white", color: eventFilter==="uncategorized" ? "white" : C.inkSoft, border:`1px solid ${C.border}`, borderRadius:20, padding:"6px 14px", fontSize:11, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", transition:"all 0.2s" }}>· Untagged</button>
       </div>
       <input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search by description or vendor..." style={{ width:"100%", padding:"10px 14px", border:`1px solid ${C.border}`, borderRadius:10, fontSize:13, background:"white", marginBottom:14 }} />
 
@@ -614,71 +810,81 @@ function ExpTab({ exps, onAdd, onEdit, onDel }) {
           <div style={{ fontSize:36, marginBottom:8 }}>📝</div>
           <div style={{ fontSize:14 }}>{exps.length === 0 ? "No expenses yet" : "No matches"}</div>
         </div>
-      ) : sorted.map((e,i) => (
-        <div key={e.id} className="slide-in" style={{ background:"white", borderRadius:14, padding:14, marginBottom:10, boxShadow:"0 1px 4px rgba(43,32,24,0.06)", borderLeft:`4px solid ${e.type==="shared" ? C.brand : e.owner==="Bride" ? C.roseSoft : C.sageSoft}`, animationDelay:`${i*.04}s` }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:15, fontWeight:600, color:C.ink, marginBottom:2 }}>{e.title}</div>
-              {e.vendor && <div style={{ fontSize:12, color:C.brand, fontWeight:600, marginBottom:3 }}>{e.vendor}</div>}
-              <div style={{ fontSize:11, color:C.inkSoft, lineHeight:1.5 }}>
-                {fmtDate(e.date)} · {e.category} · {e.type==="shared" ? `Shared · Paid by ${dn(e.paidBy)}` : `${dn(e.owner)}'s personal`}{e.paymentMode ? ` · ${e.paymentMode}` : ""}
-              </div>
-              {e.notes && <div style={{ fontSize:11, color:C.inkFaint, marginTop:5, fontStyle:"italic" }}>{e.notes}</div>}
-              {(e.photos && e.photos.length > 0) && (
-                <div style={{ display:"flex", gap:6, marginTop:8 }}>
-                  {e.photos.slice(0, 4).map((url, idx) => (
-                    <a key={idx} href={url} target="_blank" rel="noopener noreferrer" style={{ width:46, height:46, borderRadius:6, overflow:"hidden", background:`url(${url}) center/cover`, border:`1px solid ${C.border}` }} />
-                  ))}
-                  {e.photos.length > 4 && <div style={{ width:46, height:46, borderRadius:6, background:C.borderLight, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, color:C.inkSoft }}>+{e.photos.length-4}</div>}
+      ) : sorted.map((e,i) => {
+        const ec = eventColor(e.event);
+        return (
+          <div key={e.id} className="slide-in" style={{ background:"white", borderRadius:14, padding:14, marginBottom:10, boxShadow:"0 1px 4px rgba(43,32,24,0.06)", borderLeft:`4px solid ${e.type==="shared" ? C.brand : e.owner==="Bride" ? C.roseSoft : C.greenSoft}`, animationDelay:`${i*.04}s` }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:15, fontWeight:600, color:C.ink, marginBottom:3 }}>{e.title}</div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginBottom:5 }}>
+                  <span className="chip" style={{ background:ec.bg, color:ec.c }}>{eventEmoji(e.event)} {eventLabel(e.event)}</span>
+                  {e.vendor && <span className="chip" style={{ background:C.brandBg, color:C.brand }}>🏪 {e.vendor}</span>}
                 </div>
-              )}
-              {e.billLink && (
-                <a href={e.billLink} target="_blank" rel="noopener noreferrer" style={{ fontSize:11, color:C.brand, marginTop:6, display:"inline-block", textDecoration:"none", fontWeight:600 }}>📎 View link →</a>
-              )}
+                <div style={{ fontSize:11, color:C.inkSoft, lineHeight:1.5 }}>
+                  {fmtDate(e.date)} · {e.category} · {e.type==="shared" ? `Shared · Paid by ${dn(e.paidBy)}` : `${dn(e.owner)}'s personal`}{e.paymentMode ? ` · ${e.paymentMode}` : ""}
+                </div>
+                {e.notes && <div style={{ fontSize:11, color:C.inkFaint, marginTop:5, fontStyle:"italic" }}>{e.notes}</div>}
+                {(e.photos && e.photos.length > 0) && (
+                  <div style={{ display:"flex", gap:6, marginTop:8 }}>
+                    {e.photos.slice(0, 4).map((url, idx) => (
+                      <a key={idx} href={url} target="_blank" rel="noopener noreferrer" style={{ width:46, height:46, borderRadius:6, overflow:"hidden", background:`url(${url}) center/cover`, border:`1px solid ${C.border}` }} />
+                    ))}
+                    {e.photos.length > 4 && <div style={{ width:46, height:46, borderRadius:6, background:C.borderLight, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, color:C.inkSoft }}>+{e.photos.length-4}</div>}
+                  </div>
+                )}
+                {e.billLink && <a href={e.billLink} target="_blank" rel="noopener noreferrer" style={{ fontSize:11, color:C.brand, marginTop:6, display:"inline-block", textDecoration:"none", fontWeight:600 }}>📎 View link →</a>}
+              </div>
+              <div style={{ textAlign:"right", marginLeft:12 }}>
+                <div className="serif" style={{ fontSize:18, fontWeight:600, color:C.ink }}>{fmtL(e.totalCost || e.amountPaid)}</div>
+                {(e.totalCost || 0) > (e.amountPaid || 0) && (
+                  <>
+                    <div style={{ fontSize:11, color:C.green, marginTop:2, fontWeight:500 }}>Paid: {fmtL(e.amountPaid)}</div>
+                    <div style={{ fontSize:11, color:C.amber, marginTop:1, fontWeight:600 }}>Due: {fmtL((e.totalCost || 0) - (e.amountPaid || 0))}</div>
+                  </>
+                )}
+              </div>
             </div>
-            <div style={{ textAlign:"right", marginLeft:12 }}>
-              <div className="serif" style={{ fontSize:18, fontWeight:600, color:C.ink }}>{fmtL(e.totalCost || e.amountPaid)}</div>
-              {(e.totalCost || 0) > (e.amountPaid || 0) && (
-                <>
-                  <div style={{ fontSize:11, color:C.sage, marginTop:2, fontWeight:500 }}>Paid: {fmtL(e.amountPaid)}</div>
-                  <div style={{ fontSize:11, color:C.amber, marginTop:1, fontWeight:600 }}>Due: {fmtL((e.totalCost || 0) - (e.amountPaid || 0))}</div>
-                </>
-              )}
+            <div style={{ display:"flex", gap:8, marginTop:10, justifyContent:"flex-end" }}>
+              <button onClick={()=>onEdit(e)} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:6, padding:"4px 12px", fontSize:11, color:C.inkSoft, cursor:"pointer", fontWeight:500, transition:"all 0.15s" }}>Edit</button>
+              <button onClick={()=>onDel(e.id)} style={{ background:"none", border:`1px solid ${C.redBg}`, borderRadius:6, padding:"4px 12px", fontSize:11, color:C.red, cursor:"pointer", fontWeight:500, transition:"all 0.15s" }}>Delete</button>
             </div>
           </div>
-          <div style={{ display:"flex", gap:8, marginTop:10, justifyContent:"flex-end" }}>
-            <button onClick={()=>onEdit(e)} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:6, padding:"4px 12px", fontSize:11, color:C.inkSoft, cursor:"pointer", fontWeight:500 }}>Edit</button>
-            <button onClick={()=>onDel(e.id)} style={{ background:"none", border:`1px solid ${C.redBg}`, borderRadius:6, padding:"4px 12px", fontSize:11, color:C.red, cursor:"pointer", fontWeight:500 }}>Delete</button>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   VENDORS TAB (NEW)
+   VENDORS TAB
    ═══════════════════════════════════════════════════════════════════════ */
 function VendorsTab({ expList, payList }) {
-  // Group by vendor
+  const [eventFilter, setEventFilter] = useState("all");
+  const [expanded, setExpanded] = useState(null);
+
+  const filteredExp = eventFilter === "all" ? expList : eventFilter === "uncategorized" ? expList.filter(e => !e.event) : expList.filter(e => e.event === eventFilter);
+  const filteredPay = eventFilter === "all" ? payList : eventFilter === "uncategorized" ? payList.filter(p => !p.event) : payList.filter(p => p.event === eventFilter);
+
+  // Group by vendor (and split by event for visibility)
   const vendors = {};
-  expList.forEach(e => {
+  filteredExp.forEach(e => {
     const v = (e.vendor || "").trim();
     if (!v) return;
-    if (!vendors[v]) vendors[v] = { name: v, expenses: [], payments: [], totalCost: 0, paid: 0, category: e.category };
+    if (!vendors[v]) vendors[v] = { name: v, expenses: [], payments: [], totalCost: 0, paid: 0, category: e.category, events: new Set() };
     vendors[v].expenses.push(e);
     vendors[v].totalCost = Math.max(vendors[v].totalCost, e.totalCost || e.amountPaid || 0);
     vendors[v].paid += (e.amountPaid || 0);
+    if (e.event) vendors[v].events.add(e.event);
   });
-  payList.forEach(p => {
+  filteredPay.forEach(p => {
     const v = (p.vendor || "").trim();
     if (!v) return;
-    if (!vendors[v]) vendors[v] = { name: v, expenses: [], payments: [], totalCost: 0, paid: 0, category: p.category };
+    if (!vendors[v]) vendors[v] = { name: v, expenses: [], payments: [], totalCost: 0, paid: 0, category: p.category, events: new Set() };
     vendors[v].payments.push(p);
+    if (p.event) vendors[v].events.add(p.event);
   });
-
   const vendorList = Object.values(vendors).sort((a, b) => b.paid - a.paid);
-  const [expanded, setExpanded] = useState(null);
 
   return (
     <div style={{ padding:16 }} className="fade-up">
@@ -688,37 +894,51 @@ function VendorsTab({ expList, payList }) {
         <div style={{ fontSize:12, opacity:0.85, marginTop:4 }}>Tap a vendor to see all transactions</div>
       </div>
 
+      {/* Event filter */}
+      <div style={{ display:"flex", gap:6, marginBottom:14, overflowX:"auto", paddingBottom:4 }}>
+        <button onClick={()=>setEventFilter("all")} style={{ background: eventFilter==="all" ? C.gold : "white", color: eventFilter==="all" ? "white" : C.inkSoft, border:`1px solid ${C.border}`, borderRadius:20, padding:"6px 14px", fontSize:11, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", transition:"all 0.2s" }}>All Events</button>
+        {EVENTS.map(ev => (
+          <button key={ev.id} onClick={()=>setEventFilter(ev.id)} style={{ background: eventFilter===ev.id ? eventColor(ev.id).c : "white", color: eventFilter===ev.id ? "white" : C.inkSoft, border:`1px solid ${C.border}`, borderRadius:20, padding:"6px 14px", fontSize:11, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", transition:"all 0.2s" }}>{ev.emoji} {ev.short}</button>
+        ))}
+      </div>
+
       {vendorList.length === 0 ? (
         <div style={{ textAlign:"center", padding:40, color:C.inkFaint }}>
           <div style={{ fontSize:36, marginBottom:8 }}>🏪</div>
-          <div style={{ fontSize:14 }}>No vendors yet</div>
+          <div style={{ fontSize:14 }}>No vendors {eventFilter !== "all" ? "for this event" : "yet"}</div>
           <div style={{ fontSize:12, marginTop:6 }}>Add a vendor name when logging expenses</div>
         </div>
-      ) : vendorList.map(v => {
+      ) : vendorList.map((v, idx) => {
         const balance = v.totalCost - v.paid;
         const isExp = expanded === v.name;
         const upcomingForVendor = v.payments.filter(p => p.status !== "Paid");
         const nextDue = upcomingForVendor.sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate))[0];
+        const eventsList = [...v.events];
 
         return (
-          <div key={v.name} className="card slide-in" style={{ padding:0, overflow:"hidden" }}>
-            <button onClick={() => setExpanded(isExp ? null : v.name)} style={{ width:"100%", padding:14, background:"none", border:"none", textAlign:"left", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <div style={{ flex:1 }}>
+          <div key={v.name} className="card slide-in" style={{ padding:0, overflow:"hidden", animationDelay:`${idx*0.04}s` }}>
+            <button onClick={() => setExpanded(isExp ? null : v.name)} className="card-press" style={{ width:"100%", padding:14, background:"none", border:"none", textAlign:"left", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:15, fontWeight:600, color:C.ink }}>{v.name}</div>
-                <div style={{ fontSize:11, color:C.inkSoft, marginTop:2 }}>{v.category} · {v.expenses.length} payment{v.expenses.length !== 1 ? "s" : ""}{upcomingForVendor.length > 0 ? ` · ${upcomingForVendor.length} scheduled` : ""}</div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:4 }}>
+                  {eventsList.map(eid => {
+                    const ec = eventColor(eid);
+                    return <span key={eid} className="chip" style={{ background:ec.bg, color:ec.c }}>{eventEmoji(eid)} {eventLabel(eid)}</span>;
+                  })}
+                </div>
+                <div style={{ fontSize:11, color:C.inkSoft, marginTop:5 }}>{v.category} · {v.expenses.length} payment{v.expenses.length !== 1 ? "s" : ""}{upcomingForVendor.length > 0 ? ` · ${upcomingForVendor.length} scheduled` : ""}</div>
                 {nextDue && <div style={{ fontSize:11, color:C.amber, fontWeight:600, marginTop:3 }}>Next: {fmtL(nextDue.amount)} due {fmtDateShort(nextDue.dueDate)}</div>}
               </div>
-              <div style={{ textAlign:"right" }}>
+              <div style={{ textAlign:"right", marginLeft:12 }}>
                 <div className="serif" style={{ fontSize:17, fontWeight:600, color:C.ink }}>{fmtL(v.paid)}</div>
                 {balance > 0 && <div style={{ fontSize:11, color:C.red, fontWeight:600, marginTop:2 }}>{fmtL(balance)} due</div>}
-                {v.totalCost > 0 && balance <= 0 && <div style={{ fontSize:11, color:C.sage, fontWeight:600, marginTop:2 }}>✓ Settled</div>}
-                <div style={{ fontSize:14, color:C.inkFaint, marginTop:4 }}>{isExp ? "▴" : "▾"}</div>
+                {v.totalCost > 0 && balance <= 0 && <div style={{ fontSize:11, color:C.green, fontWeight:600, marginTop:2 }}>✓ Settled</div>}
+                <span className={`chevron ${isExp?"open":""}`} style={{ fontSize:14, marginTop:4, display:"block" }}>▾</span>
               </div>
             </button>
 
             {isExp && (
-              <div style={{ borderTop:`1px solid ${C.borderLight}`, padding:14, background:C.bg }}>
-                {/* Progress bar if total cost is set */}
+              <div className="expand-down" style={{ borderTop:`1px solid ${C.borderLight}`, padding:14, background:C.bgWarm }}>
                 {v.totalCost > 0 && (
                   <div style={{ marginBottom:14 }}>
                     <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
@@ -726,22 +946,20 @@ function VendorsTab({ expList, payList }) {
                       <span style={{ fontSize:11, color:C.inkSoft, fontWeight:600 }}>{fmtL(v.paid)} / {fmtL(v.totalCost)}</span>
                     </div>
                     <div style={{ height:6, background:C.borderLight, borderRadius:3, overflow:"hidden" }}>
-                      <div style={{ height:"100%", borderRadius:3, width:`${Math.min((v.paid/v.totalCost)*100, 100)}%`, background:`linear-gradient(90deg, ${C.sageSoft}, ${C.sage})` }} />
+                      <div style={{ height:"100%", borderRadius:3, width:`${Math.min((v.paid/v.totalCost)*100, 100)}%`, background:`linear-gradient(90deg, ${C.greenSoft}, ${C.green})`, transition:"width 0.6s cubic-bezier(0.16, 1, 0.3, 1)" }} />
                     </div>
                   </div>
                 )}
-
                 <div style={{ fontSize:11, color:C.inkSoft, fontWeight:700, textTransform:"uppercase", letterSpacing:1, marginBottom:8 }}>Payments</div>
                 {v.expenses.sort((a,b) => new Date(b.date) - new Date(a.date)).map(e => (
                   <div key={e.id} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:`1px solid ${C.borderLight}` }}>
                     <div>
                       <div style={{ fontSize:13, fontWeight:500, color:C.ink }}>{e.title}</div>
-                      <div style={{ fontSize:11, color:C.inkSoft }}>{fmtDateShort(e.date)} · {dn(e.paidBy) || dn(e.owner)}{e.paymentMode ? ` · ${e.paymentMode}` : ""}</div>
+                      <div style={{ fontSize:11, color:C.inkSoft }}>{fmtDateShort(e.date)} · {eventLabel(e.event)} · {dn(e.paidBy) || dn(e.owner)}{e.paymentMode ? ` · ${e.paymentMode}` : ""}</div>
                     </div>
                     <div className="serif" style={{ fontSize:14, fontWeight:600, color:C.ink }}>{fmtL(e.amountPaid)}</div>
                   </div>
                 ))}
-
                 {upcomingForVendor.length > 0 && (
                   <>
                     <div style={{ fontSize:11, color:C.amber, fontWeight:700, textTransform:"uppercase", letterSpacing:1, marginTop:14, marginBottom:8 }}>Upcoming</div>
@@ -749,7 +967,7 @@ function VendorsTab({ expList, payList }) {
                       <div key={p.id} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:`1px solid ${C.borderLight}` }}>
                         <div>
                           <div style={{ fontSize:13, fontWeight:500, color:C.ink }}>{p.title || "Installment"}</div>
-                          <div style={{ fontSize:11, color:C.amber, fontWeight:600 }}>Due {fmtDateShort(p.dueDate)}</div>
+                          <div style={{ fontSize:11, color:C.amber, fontWeight:600 }}>Due {fmtDateShort(p.dueDate)} · {eventLabel(p.event)}</div>
                         </div>
                         <div className="serif" style={{ fontSize:14, fontWeight:600, color:C.ink }}>{fmtL(p.amount)}</div>
                       </div>
@@ -766,21 +984,35 @@ function VendorsTab({ expList, payList }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   UPCOMING PAYMENTS TAB (NEW)
+   UPCOMING PAYMENTS TAB
    ═══════════════════════════════════════════════════════════════════════ */
 function UpcomingTab({ payList, onAdd, onEdit, onDel, onMarkPaid }) {
-  const pending = payList.filter(p => p.status !== "Paid").sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate));
-  const paid = payList.filter(p => p.status === "Paid");
+  const [eventFilter, setEventFilter] = useState("all");
+  const filtered = payList.filter(p => {
+    if (eventFilter === "uncategorized" && p.event) return false;
+    if (eventFilter !== "all" && eventFilter !== "uncategorized" && p.event !== eventFilter) return false;
+    return true;
+  });
+  const pending = filtered.filter(p => p.status !== "Paid").sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate));
+  const paid = filtered.filter(p => p.status === "Paid");
   const totalDue = pending.reduce((s,p) => s + (p.amount || 0), 0);
   const overdueCount = pending.filter(p => { const d = daysUntil(p.dueDate); return d !== null && d < 0; }).length;
 
   return (
     <div style={{ padding:16 }} className="fade-up">
-      {/* Summary card */}
-      <div className="card" style={{ background:`linear-gradient(135deg, ${C.amber}, #C77F4A)`, color:"white" }}>
-        <div style={{ fontSize:11, textTransform:"uppercase", letterSpacing:1.5, opacity:0.85, marginBottom:4, fontWeight:600 }}>Upcoming Total</div>
-        <div className="serif" style={{ fontSize:26, fontWeight:600 }}>{fmtL(totalDue)}</div>
-        <div style={{ fontSize:12, opacity:0.85, marginTop:4 }}>{pending.length} payment{pending.length !== 1 ? "s" : ""} pending{overdueCount > 0 ? ` · ${overdueCount} overdue` : ""}</div>
+      <div className="card" style={{ background:`linear-gradient(135deg, ${C.amber}, #C77F4A)`, color:"white", position:"relative", overflow:"hidden" }}>
+        <div style={{ position:"absolute", top:-20, right:-20, width:100, height:100, borderRadius:"50%", background:"radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%)" }} />
+        <div style={{ fontSize:11, textTransform:"uppercase", letterSpacing:1.5, opacity:0.85, marginBottom:4, fontWeight:600, position:"relative" }}>Upcoming Total</div>
+        <div className="serif" style={{ fontSize:26, fontWeight:600, position:"relative" }}>{fmtL(totalDue)}</div>
+        <div style={{ fontSize:12, opacity:0.85, marginTop:4, position:"relative" }}>{pending.length} payment{pending.length !== 1 ? "s" : ""} pending{overdueCount > 0 ? ` · ${overdueCount} overdue` : ""}</div>
+      </div>
+
+      {/* Event filter */}
+      <div style={{ display:"flex", gap:6, marginBottom:14, overflowX:"auto", paddingBottom:4 }}>
+        <button onClick={()=>setEventFilter("all")} style={{ background: eventFilter==="all" ? C.gold : "white", color: eventFilter==="all" ? "white" : C.inkSoft, border:`1px solid ${C.border}`, borderRadius:20, padding:"6px 14px", fontSize:11, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", transition:"all 0.2s" }}>All Events</button>
+        {EVENTS.map(ev => (
+          <button key={ev.id} onClick={()=>setEventFilter(ev.id)} style={{ background: eventFilter===ev.id ? eventColor(ev.id).c : "white", color: eventFilter===ev.id ? "white" : C.inkSoft, border:`1px solid ${C.border}`, borderRadius:20, padding:"6px 14px", fontSize:11, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", transition:"all 0.2s" }}>{ev.emoji} {ev.short}</button>
+        ))}
       </div>
 
       <button className="btn-primary" onClick={onAdd} style={{ width:"100%", padding:14, fontSize:15, marginBottom:16 }}>+ Schedule Payment</button>
@@ -789,32 +1021,32 @@ function UpcomingTab({ payList, onAdd, onEdit, onDel, onMarkPaid }) {
         <div style={{ textAlign:"center", padding:40, color:C.inkFaint }}>
           <div style={{ fontSize:36, marginBottom:8 }}>📅</div>
           <div style={{ fontSize:14 }}>No upcoming payments scheduled</div>
-          <div style={{ fontSize:12, marginTop:6 }}>Add deposits, installments, or future commitments</div>
         </div>
       ) : pending.map((p,i) => {
         const days = daysUntil(p.dueDate);
         const overdue = days !== null && days < 0;
         const urgent = days !== null && days >= 0 && days <= 7;
         const accent = overdue ? C.red : urgent ? C.amber : C.inkSoft;
-
+        const ec = eventColor(p.event);
         return (
           <div key={p.id} className="card slide-in" style={{ borderLeft:`4px solid ${accent}`, animationDelay:`${i*.04}s` }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
-              <div style={{ flex:1 }}>
+              <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:15, fontWeight:600, color:C.ink }}>{p.vendor || p.title}</div>
                 {p.title && p.vendor && <div style={{ fontSize:12, color:C.inkSoft, marginTop:2 }}>{p.title}</div>}
+                <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginTop:5 }}>
+                  <span className="chip" style={{ background:ec.bg, color:ec.c }}>{eventEmoji(p.event)} {eventLabel(p.event)}</span>
+                </div>
                 <div style={{ fontSize:11, color:accent, fontWeight:600, marginTop:5 }}>
                   {fmtDate(p.dueDate)} · {overdue ? `${Math.abs(days)} days overdue` : days === 0 ? "Due today" : `${days} days to go`}
                 </div>
-                <div style={{ fontSize:11, color:C.inkSoft, marginTop:3 }}>
-                  {p.category} · {p.shared ? "Shared" : "Personal"} · {dn(p.whoPays)}
-                </div>
+                <div style={{ fontSize:11, color:C.inkSoft, marginTop:3 }}>{p.category} · {p.shared ? "Shared" : "Personal"} · {dn(p.whoPays)}</div>
                 {p.notes && <div style={{ fontSize:11, color:C.inkFaint, marginTop:5, fontStyle:"italic" }}>{p.notes}</div>}
               </div>
               <div className="serif" style={{ fontSize:18, fontWeight:600, color:C.ink, marginLeft:12 }}>{fmtL(p.amount)}</div>
             </div>
             <div style={{ display:"flex", gap:8, marginTop:12, justifyContent:"flex-end" }}>
-              <button onClick={() => { if (window.confirm(`Mark "${p.vendor || p.title}" as paid? This will create an expense entry.`)) onMarkPaid(p); }} style={{ background:C.sage, color:"white", border:"none", borderRadius:6, padding:"6px 14px", fontSize:11, cursor:"pointer", fontWeight:600 }}>✓ Mark Paid</button>
+              <button onClick={() => { if (window.confirm(`Mark "${p.vendor || p.title}" as paid?`)) onMarkPaid(p); }} style={{ background:C.green, color:"white", border:"none", borderRadius:6, padding:"6px 14px", fontSize:11, cursor:"pointer", fontWeight:600, transition:"all 0.15s" }}>✓ Mark Paid</button>
               <button onClick={()=>onEdit(p)} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:6, padding:"6px 12px", fontSize:11, color:C.inkSoft, cursor:"pointer", fontWeight:500 }}>Edit</button>
               <button onClick={()=>onDel(p.id)} style={{ background:"none", border:`1px solid ${C.redBg}`, borderRadius:6, padding:"6px 12px", fontSize:11, color:C.red, cursor:"pointer", fontWeight:500 }}>Delete</button>
             </div>
@@ -826,11 +1058,11 @@ function UpcomingTab({ payList, onAdd, onEdit, onDel, onMarkPaid }) {
         <>
           <div style={{ fontSize:11, color:C.inkSoft, fontWeight:700, textTransform:"uppercase", letterSpacing:1, marginTop:24, marginBottom:8 }}>Completed</div>
           {paid.map(p => (
-            <div key={p.id} className="card" style={{ opacity:0.6 }}>
+            <div key={p.id} className="card" style={{ opacity:0.65 }}>
               <div style={{ display:"flex", justifyContent:"space-between" }}>
                 <div>
                   <div style={{ fontSize:14, fontWeight:500, color:C.ink, textDecoration:"line-through" }}>{p.vendor || p.title}</div>
-                  <div style={{ fontSize:11, color:C.sage, fontWeight:600 }}>✓ Paid</div>
+                  <div style={{ fontSize:11, color:C.green, fontWeight:600 }}>✓ Paid · {eventLabel(p.event)}</div>
                 </div>
                 <div className="serif" style={{ fontSize:16, color:C.inkSoft }}>{fmtL(p.amount)}</div>
               </div>
@@ -854,11 +1086,21 @@ function InsTab({ data, onExport }) {
   const overBud = Object.entries(catS).filter(([,d]) => d.total > d.budget && d.budget > 0);
   const payM = {}; expList.forEach(e => { const m = e.paymentMode || "Unspecified"; payM[m] = (payM[m] || 0) + (e.amountPaid || 0); });
   const monthly = {}; expList.forEach(e => { if (!e.date) return; const k = e.date.substring(0, 7); monthly[k] = (monthly[k] || 0) + (e.amountPaid || 0); });
-  // Unpaid balance = committed - paid, across all expense types
   const sharedUnpaid = tsc - shared.reduce((s, e) => s + (e.amountPaid || 0), 0);
   const personalUnpaid = (bptCost - bpt) + (gptCost - gpt);
   const vendorBal = sharedUnpaid + personalUnpaid;
   const upcomingTotal = payList.filter(p => p.status !== "Paid").reduce((s,p) => s + (p.amount || 0), 0);
+
+  // Per-event totals
+  const eventTotals = {};
+  EVENTS.concat([UNCATEGORIZED]).forEach(ev => {
+    const id = ev.id === "uncategorized" ? null : ev.id;
+    const items = expList.filter(e => (e.event || null) === id);
+    const sharedTotal = items.filter(e => e.type === "shared").reduce((s, e) => s + (e.totalCost || 0), 0);
+    const personalTotal = items.filter(e => e.type === "personal").reduce((s, e) => s + (e.totalCost || e.amountPaid || 0), 0);
+    const total = sharedTotal + personalTotal;
+    if (total > 0 || items.length > 0) eventTotals[ev.id] = { ...ev, sharedTotal, personalTotal, total, count: items.length };
+  });
 
   const SR = ({ label, value, color }) => (
     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:`1px solid ${C.borderLight}` }}>
@@ -869,7 +1111,40 @@ function InsTab({ data, onExport }) {
 
   return (
     <div style={{ padding:16 }} className="fade-up">
-      <button onClick={onExport} className="btn-primary" style={{ width:"100%", padding:14, fontSize:15, marginBottom:16, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>📊 Download Excel / CSV</button>
+      <button onClick={onExport} className="btn-gold" style={{ width:"100%", padding:14, fontSize:15, marginBottom:16, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>📊 Download Excel / CSV</button>
+
+      {/* Per-event breakdown */}
+      {Object.keys(eventTotals).length > 0 && (
+        <div className="card">
+          <div style={{ fontSize:14, fontWeight:700, color:C.ink, marginBottom:12 }}>By Event</div>
+          {Object.values(eventTotals).map((ev, i) => {
+            const ec = eventColor(ev.id === "uncategorized" ? null : ev.id);
+            const pct = ts > 0 ? (ev.total / ts) * 100 : 0;
+            return (
+              <div key={ev.id} className="slide-in" style={{ marginBottom:12, animationDelay:`${i*0.04}s` }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:6 }}>
+                  <div>
+                    <span style={{ fontSize:13, fontWeight:600, color:ec.c }}>{ev.emoji} {ev.label}</span>
+                    <span style={{ fontSize:11, color:C.inkSoft, marginLeft:6 }}>· {ev.count} expense{ev.count!==1?"s":""}</span>
+                  </div>
+                  <div style={{ textAlign:"right" }}>
+                    <span className="serif" style={{ fontSize:15, fontWeight:600, color:C.ink }}>{fmtL(ev.total)}</span>
+                    <span style={{ fontSize:11, color:C.inkFaint, marginLeft:6 }}>({pct.toFixed(0)}%)</span>
+                  </div>
+                </div>
+                <div style={{ height:7, background:C.borderLight, borderRadius:4, overflow:"hidden", display:"flex" }}>
+                  {ev.sharedTotal > 0 && <div style={{ width:`${(ev.sharedTotal/ev.total)*100}%`, background:C.brand, transition:"width 0.6s cubic-bezier(0.16, 1, 0.3, 1)" }} />}
+                  {ev.personalTotal > 0 && <div style={{ width:`${(ev.personalTotal/ev.total)*100}%`, background:`linear-gradient(90deg, ${C.roseSoft}, ${C.green})`, transition:"width 0.6s cubic-bezier(0.16, 1, 0.3, 1)" }} />}
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, fontSize:10, color:C.inkSoft }}>
+                  <span>Shared: {fmtL(ev.sharedTotal)}</span>
+                  <span>Personal: {fmtL(ev.personalTotal)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="card">
         <div style={{ fontSize:14, fontWeight:700, color:C.ink, marginBottom:8 }}>Overview</div>
@@ -888,15 +1163,15 @@ function InsTab({ data, onExport }) {
             <div style={{ fontSize:10, opacity:0.85, fontWeight:600 }}>Sanjana</div>
             <div className="serif" style={{ fontSize:17, fontWeight:600 }}>{fmtL(bp+bpt)}</div>
           </div>
-          <div style={{ flex: (gp+gpt) || 1, background:`linear-gradient(90deg, ${C.sageSoft}, ${C.sage})`, borderRadius:8, padding:"10px 12px", color:"white", minWidth:60 }}>
+          <div style={{ flex: (gp+gpt) || 1, background:`linear-gradient(90deg, ${C.greenSoft}, ${C.green})`, borderRadius:8, padding:"10px 12px", color:"white", minWidth:60 }}>
             <div style={{ fontSize:10, opacity:0.85, fontWeight:600 }}>Akhil</div>
             <div className="serif" style={{ fontSize:17, fontWeight:600 }}>{fmtL(gp+gpt)}</div>
           </div>
         </div>
         <SR label="Sanjana — Shared" value={fmtL(bp)} color={C.rose} />
         <SR label="Sanjana — Personal" value={fmtL(bpt)} color={C.rose} />
-        <SR label="Akhil — Shared" value={fmtL(gp)} color={C.sage} />
-        <SR label="Akhil — Personal" value={fmtL(gpt)} color={C.sage} />
+        <SR label="Akhil — Shared" value={fmtL(gp)} color={C.green} />
+        <SR label="Akhil — Personal" value={fmtL(gpt)} color={C.green} />
       </div>
 
       {vendorBal > 0 && (
@@ -965,7 +1240,7 @@ function InsTab({ data, onExport }) {
                   <span className="serif" style={{ fontSize:13, fontWeight:600 }}>{fmtL(a)}</span>
                 </div>
                 <div style={{ height:6, background:C.borderLight, borderRadius:3, overflow:"hidden" }}>
-                  <div style={{ height:"100%", borderRadius:3, width:`${bw}%`, background:`linear-gradient(90deg, ${C.brand}, ${C.brandSoft})` }} />
+                  <div style={{ height:"100%", borderRadius:3, width:`${bw}%`, background:`linear-gradient(90deg, ${C.brand}, ${C.brandSoft})`, transition:"width 0.6s cubic-bezier(0.16, 1, 0.3, 1)" }} />
                 </div>
               </div>
             );
@@ -984,55 +1259,40 @@ function InsTab({ data, onExport }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   PHOTO UPLOADER (used inside modals)
+   PHOTO UPLOADER
    ═══════════════════════════════════════════════════════════════════════ */
 function PhotoUploader({ photos, setPhotos, expenseId, onUploadingChange }) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const cameraRef = useRef(null);
   const fileRef = useRef(null);
-
-  // Notify parent when upload state changes
   useEffect(() => { if (onUploadingChange) onUploadingChange(uploading); }, [uploading, onUploadingChange]);
 
-  const uploadToCloudinary = (blob) => {
-    return new Promise((resolve, reject) => {
-      const formData = new FormData();
-      formData.append("file", blob);
-      formData.append("upload_preset", CLOUDINARY.uploadPreset);
-      formData.append("folder", `wedding-bills/${expenseId || "general"}`);
-
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUDINARY.cloudName}/image/upload`);
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
-      };
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            const res = JSON.parse(xhr.responseText);
-            resolve(res.secure_url);
-          } catch (e) {
-            reject(new Error("Invalid response from Cloudinary"));
-          }
-        } else {
-          let errMsg = `Upload failed (${xhr.status})`;
-          try {
-            const res = JSON.parse(xhr.responseText);
-            if (res.error?.message) errMsg = res.error.message;
-          } catch {}
-          reject(new Error(errMsg));
-        }
-      };
-      xhr.onerror = () => reject(new Error("Network error during upload"));
-      xhr.send(formData);
-    });
-  };
+  const uploadToCloudinary = (blob) => new Promise((resolve, reject) => {
+    const formData = new FormData();
+    formData.append("file", blob);
+    formData.append("upload_preset", CLOUDINARY.uploadPreset);
+    formData.append("folder", `wedding-bills/${expenseId || "general"}`);
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUDINARY.cloudName}/image/upload`);
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100)); };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText).secure_url); }
+        catch { reject(new Error("Invalid response")); }
+      } else {
+        let errMsg = `Upload failed (${xhr.status})`;
+        try { const res = JSON.parse(xhr.responseText); if (res.error?.message) errMsg = res.error.message; } catch {}
+        reject(new Error(errMsg));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Network error"));
+    xhr.send(formData);
+  });
 
   const upload = async (files) => {
     if (!files || !files.length) return;
-    setUploading(true);
-    setProgress(0);
+    setUploading(true); setProgress(0);
     const newUrls = [...(photos || [])];
     try {
       for (const f of Array.from(files)) {
@@ -1043,20 +1303,15 @@ function PhotoUploader({ photos, setPhotos, expenseId, onUploadingChange }) {
           setPhotos([...newUrls]);
         } catch (e) {
           console.error("Photo upload failed:", e);
-          alert(`Photo upload failed: ${e.message}\n\nCheck your Cloudinary upload preset is set to "Unsigned".`);
+          alert(`Photo upload failed: ${e.message}`);
           break;
         }
       }
-    } finally {
-      setUploading(false);
-      setProgress(0);
-    }
+    } finally { setUploading(false); setProgress(0); }
   };
 
   const removePhoto = (idx) => {
     if (!window.confirm("Remove this photo?")) return;
-    // Note: photo stays in Cloudinary (we don't have delete permissions from browser)
-    // but link is removed from the expense, so it won't appear anywhere
     setPhotos(photos.filter((_, i) => i !== idx));
   };
 
@@ -1064,7 +1319,6 @@ function PhotoUploader({ photos, setPhotos, expenseId, onUploadingChange }) {
     <div>
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={e => { upload(e.target.files); e.target.value = ""; }} />
       <input ref={fileRef} type="file" accept="image/*" multiple style={{ display:"none" }} onChange={e => { upload(e.target.files); e.target.value = ""; }} />
-
       {photos && photos.length > 0 && (
         <div style={{ display:"flex", gap:8, marginBottom:10, flexWrap:"wrap" }}>
           {photos.map((url, idx) => (
@@ -1075,7 +1329,6 @@ function PhotoUploader({ photos, setPhotos, expenseId, onUploadingChange }) {
           ))}
         </div>
       )}
-
       {uploading && progress > 0 && (
         <div style={{ marginBottom:8 }}>
           <div style={{ height:4, background:C.borderLight, borderRadius:2, overflow:"hidden" }}>
@@ -1084,16 +1337,15 @@ function PhotoUploader({ photos, setPhotos, expenseId, onUploadingChange }) {
           <div style={{ fontSize:11, color:C.inkSoft, marginTop:4, textAlign:"center" }}>Uploading... {progress}%</div>
         </div>
       )}
-
       <div style={{ display:"flex", gap:8 }}>
-        <button type="button" onClick={() => cameraRef.current?.click()} disabled={uploading} style={{ flex:1, padding:"10px 14px", border:`1px dashed ${C.border}`, borderRadius:10, background:"white", color:C.brand, fontSize:13, fontWeight:600, cursor:uploading ? "not-allowed" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+        <button type="button" onClick={() => cameraRef.current?.click()} disabled={uploading} style={{ flex:1, padding:"10px 14px", border:`1px dashed ${C.border}`, borderRadius:10, background:"white", color:C.brand, fontSize:13, fontWeight:600, cursor:uploading ? "not-allowed" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"all 0.2s" }}>
           {uploading ? <span className="spinner" style={{ borderTopColor: C.brand, borderColor:"rgba(155,85,54,0.2)" }} /> : "📷"} {uploading ? "Uploading..." : "Take Photo"}
         </button>
-        <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} style={{ flex:1, padding:"10px 14px", border:`1px dashed ${C.border}`, borderRadius:10, background:"white", color:C.brand, fontSize:13, fontWeight:600, cursor:uploading ? "not-allowed" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+        <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} style={{ flex:1, padding:"10px 14px", border:`1px dashed ${C.border}`, borderRadius:10, background:"white", color:C.brand, fontSize:13, fontWeight:600, cursor:uploading ? "not-allowed" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"all 0.2s" }}>
           🖼️ Upload
         </button>
       </div>
-      <div style={{ fontSize:11, color:C.inkFaint, marginTop:4 }}>Photos compressed automatically before upload</div>
+      <div style={{ fontSize:11, color:C.inkFaint, marginTop:4 }}>Photos compressed automatically</div>
     </div>
   );
 }
@@ -1104,6 +1356,7 @@ function PhotoUploader({ photos, setPhotos, expenseId, onUploadingChange }) {
 function ExpModal({ cats, init, onSave, onClose }) {
   const [type, setType] = useState(init?.type || "shared");
   const [owner, setOwner] = useState(init?.owner || "Bride");
+  const [event, setEvent] = useState(init?.event || "");
   const [date, setDate] = useState(init?.date || new Date().toISOString().split("T")[0]);
   const [title, setTitle] = useState(init?.title || "");
   const [vendor, setVendor] = useState(init?.vendor || "");
@@ -1124,6 +1377,7 @@ function ExpModal({ cats, init, onSave, onClose }) {
     const errs = {};
     if (!title.trim()) errs.title = "Description is required";
     if (!ap || parseFloat(ap) <= 0 || isNaN(parseFloat(ap))) errs.ap = "Enter a valid amount > 0";
+    if (!event && !init) errs.event = "Please pick an event";
     if (tc && parseFloat(tc) < parseFloat(ap || 0)) errs.tc = "Total can't be less than paid";
     setErrors(errs);
     if (Object.keys(errs).length > 0) {
@@ -1134,8 +1388,8 @@ function ExpModal({ cats, init, onSave, onClose }) {
     setSubmitting(true);
     setTimeout(() => setSubmitting(false), 5000);
     onSave({
-      type,
-      owner: type === "personal" ? owner : undefined,
+      type, owner: type === "personal" ? owner : undefined,
+      event: event || undefined,
       date, title: title.trim(), vendor: vendor.trim(), category: cat,
       paidBy: type === "shared" ? paidBy : owner,
       totalCost: parseFloat(tc) || parseFloat(ap),
@@ -1144,22 +1398,40 @@ function ExpModal({ cats, init, onSave, onClose }) {
     });
   };
 
-  const inp = { width:"100%", padding:"10px 12px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:14, background:"white", color:C.ink, outline:"none" };
+  const inp = { width:"100%", padding:"10px 12px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:14, background:"white", color:C.ink, outline:"none", transition:"all 0.2s" };
   const inpErr = { ...inp, border:`1px solid ${C.red}`, background:C.redBg };
   const lbl = { fontSize:12, fontWeight:600, color:C.inkSoft, marginBottom:5, display:"block" };
   const errMsg = (m) => m ? <div style={{ fontSize:11, color:C.red, marginTop:4, fontWeight:600 }}>⚠ {m}</div> : null;
 
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(43,32,24,0.5)", zIndex:60, display:"flex", alignItems:"flex-end", justifyContent:"center", backdropFilter:"blur(4px)" }} onClick={e => { if(e.target===e.currentTarget) onClose(); }}>
-      <div className="fade-up" style={{ background:C.bg, borderRadius:"24px 24px 0 0", width:"100%", maxWidth:480, maxHeight:"92vh", overflow:"auto", padding:"22px 20px 32px" }}>
+    <div style={{ position:"fixed", inset:0, background:"rgba(43,32,24,0.55)", zIndex:60, display:"flex", alignItems:"flex-end", justifyContent:"center", backdropFilter:"blur(6px)", animation:"fadeUp 0.3s ease" }} onClick={e => { if(e.target===e.currentTarget) onClose(); }}>
+      <div className="fade-up" style={{ background:C.bg, borderRadius:"24px 24px 0 0", width:"100%", maxWidth:480, maxHeight:"92vh", overflow:"auto", padding:"22px 20px 32px", boxShadow:"0 -8px 32px rgba(0,0,0,0.15)" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
           <div className="serif" style={{ fontSize:22, fontWeight:600, color:C.ink }}>{init ? "Edit Expense" : "Add Expense"}</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:C.inkSoft }}>×</button>
         </div>
 
+        {/* Event picker — FIRST */}
+        <div id="field-event" style={{ marginBottom:16 }}>
+          <label style={lbl}>Event{errors.event && <span style={{ color:C.red }}> *</span>}</label>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            {EVENTS.map(ev => {
+              const ec = eventColor(ev.id);
+              const sel = event === ev.id;
+              return (
+                <button key={ev.id} onClick={() => { setEvent(ev.id); if(errors.event) setErrors({...errors, event:null}); }} style={{ padding:"10px 10px", borderRadius:10, border:`2px solid ${sel ? ec.c : C.border}`, background: sel ? ec.bg : "white", color: sel ? ec.c : C.inkSoft, fontSize:12, fontWeight:600, cursor:"pointer", textAlign:"center", transition:"all 0.2s" }}>
+                  <div style={{ fontSize:16 }}>{ev.emoji}</div>
+                  <div style={{ marginTop:2 }}>{ev.label}</div>
+                </button>
+              );
+            })}
+          </div>
+          {errMsg(errors.event)}
+        </div>
+
         <div style={{ display:"flex", gap:8, marginBottom:16 }}>
           {["shared","personal"].map(t => (
-            <button key={t} onClick={() => setType(t)} style={{ flex:1, padding:10, borderRadius:10, border:"2px solid", borderColor: type===t ? C.brand : C.border, background: type===t ? C.brandBg : "white", color: type===t ? C.brand : C.inkSoft, fontSize:13, fontWeight:700, cursor:"pointer" }}>
+            <button key={t} onClick={() => setType(t)} style={{ flex:1, padding:10, borderRadius:10, border:"2px solid", borderColor: type===t ? C.brand : C.border, background: type===t ? C.brandBg : "white", color: type===t ? C.brand : C.inkSoft, fontSize:13, fontWeight:700, cursor:"pointer", transition:"all 0.2s" }}>
               {t==="shared" ? "🤝 Shared (50-50)" : "👤 Personal"}
             </button>
           ))}
@@ -1170,7 +1442,7 @@ function ExpModal({ cats, init, onSave, onClose }) {
             <label style={lbl}>Whose expense?</label>
             <div style={{ display:"flex", gap:8 }}>
               {["Bride","Groom"].map(w => (
-                <button key={w} onClick={() => setOwner(w)} style={{ flex:1, padding:10, borderRadius:8, border:`2px solid ${owner===w ? (w==="Bride" ? C.roseSoft : C.sageSoft) : C.border}`, background: owner===w ? (w==="Bride" ? C.roseBg : C.sageBg) : "white", fontSize:13, fontWeight:600, cursor:"pointer", color: owner===w ? (w==="Bride" ? C.rose : C.sage) : C.inkSoft }}>
+                <button key={w} onClick={() => setOwner(w)} style={{ flex:1, padding:10, borderRadius:8, border:`2px solid ${owner===w ? (w==="Bride" ? C.roseSoft : C.greenSoft) : C.border}`, background: owner===w ? (w==="Bride" ? C.roseBg : C.greenBg) : "white", fontSize:13, fontWeight:600, cursor:"pointer", color: owner===w ? (w==="Bride" ? C.rose : C.green) : C.inkSoft, transition:"all 0.2s" }}>
                   {w==="Bride" ? "✿ Sanjana" : "❖ Akhil"}
                 </button>
               ))}
@@ -1186,7 +1458,7 @@ function ExpModal({ cats, init, onSave, onClose }) {
             {errMsg(errors.title)}
           </div>
           <div>
-            <label style={lbl}>Vendor <span style={{ color:C.inkFaint, fontWeight:400 }}>(optional, for tracking)</span></label>
+            <label style={lbl}>Vendor <span style={{ color:C.inkFaint, fontWeight:400 }}>(optional)</span></label>
             <input value={vendor} onChange={e=>setVendor(e.target.value)} placeholder="e.g. Happiness Weddings" style={inp} />
           </div>
           <div>
@@ -1198,11 +1470,7 @@ function ExpModal({ cats, init, onSave, onClose }) {
           <div id="field-tc">
             <label style={lbl}>Total Cost of Item (₹) <span style={{ color:C.inkFaint, fontWeight:400 }}>(optional)</span></label>
             <input type="number" value={tc} onChange={e=>{setTC(e.target.value); if(errors.tc) setErrors({...errors,tc:null});}} placeholder={type==="shared" ? "Full cost, e.g. 105000" : "Full price, e.g. 85000"} style={errors.tc ? inpErr : inp} />
-            <div style={{ fontSize:11, color:C.inkFaint, marginTop:4 }}>
-              {type==="shared"
-                ? "Full price — 50% share auto-calculated. Leave blank to use Amount Paid."
-                : "If paying in instalments, enter full price here and the part you paid now below. Leave blank if paying in full."}
-            </div>
+            <div style={{ fontSize:11, color:C.inkFaint, marginTop:4 }}>{type==="shared" ? "Full price — 50% share auto-calculated. Leave blank to use Amount Paid." : "Useful for instalments. Leave blank if paying in full."}</div>
             {errMsg(errors.tc)}
           </div>
           {type==="shared" && (
@@ -1210,9 +1478,7 @@ function ExpModal({ cats, init, onSave, onClose }) {
               <label style={lbl}>Paid By</label>
               <div style={{ display:"flex", gap:6 }}>
                 {["Bride","Groom","Both"].map(w => (
-                  <button key={w} onClick={() => setPB(w)} style={{ flex:1, padding:9, borderRadius:8, border:`2px solid ${paidBy===w ? C.brand : C.border}`, background: paidBy===w ? C.brandBg : "white", fontSize:12, fontWeight:600, cursor:"pointer", color: paidBy===w ? C.brand : C.inkSoft }}>
-                    {dn(w)}
-                  </button>
+                  <button key={w} onClick={() => setPB(w)} style={{ flex:1, padding:9, borderRadius:8, border:`2px solid ${paidBy===w ? C.brand : C.border}`, background: paidBy===w ? C.brandBg : "white", fontSize:12, fontWeight:600, cursor:"pointer", color: paidBy===w ? C.brand : C.inkSoft, transition:"all 0.2s" }}>{dn(w)}</button>
                 ))}
               </div>
             </div>
@@ -1257,11 +1523,12 @@ function ExpModal({ cats, init, onSave, onClose }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   PAYMENT MODAL (Upcoming)
+   PAYMENT MODAL
    ═══════════════════════════════════════════════════════════════════════ */
 function PayModal({ cats, init, onSave, onClose }) {
   const [vendor, setVendor] = useState(init?.vendor || "");
   const [title, setTitle] = useState(init?.title || "");
+  const [event, setEvent] = useState(init?.event || "");
   const [cat, setCat] = useState(init?.category || cats[0]);
   const [amount, setAmount] = useState(init?.amount?.toString() || "");
   const [dueDate, setDueDate] = useState(init?.dueDate || "");
@@ -1275,22 +1542,40 @@ function PayModal({ cats, init, onSave, onClose }) {
     if (!vendor.trim() && !title.trim()) errs.vendor = "Enter a vendor or description";
     if (!amount || parseFloat(amount) <= 0) errs.amount = "Enter a valid amount";
     if (!dueDate) errs.dueDate = "Due date required";
+    if (!event) errs.event = "Please pick an event";
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
-    onSave({ vendor: vendor.trim(), title: title.trim(), category: cat, amount: parseFloat(amount), dueDate, shared, whoPays, notes: notes.trim() });
+    onSave({ vendor: vendor.trim(), title: title.trim(), event, category: cat, amount: parseFloat(amount), dueDate, shared, whoPays, notes: notes.trim() });
   };
 
-  const inp = { width:"100%", padding:"10px 12px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:14, background:"white", color:C.ink, outline:"none" };
+  const inp = { width:"100%", padding:"10px 12px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:14, background:"white", color:C.ink, outline:"none", transition:"all 0.2s" };
   const inpErr = { ...inp, border:`1px solid ${C.red}`, background:C.redBg };
   const lbl = { fontSize:12, fontWeight:600, color:C.inkSoft, marginBottom:5, display:"block" };
   const errMsg = (m) => m ? <div style={{ fontSize:11, color:C.red, marginTop:4, fontWeight:600 }}>⚠ {m}</div> : null;
 
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(43,32,24,0.5)", zIndex:60, display:"flex", alignItems:"flex-end", justifyContent:"center", backdropFilter:"blur(4px)" }} onClick={e => { if(e.target===e.currentTarget) onClose(); }}>
-      <div className="fade-up" style={{ background:C.bg, borderRadius:"24px 24px 0 0", width:"100%", maxWidth:480, maxHeight:"92vh", overflow:"auto", padding:"22px 20px 32px" }}>
+    <div style={{ position:"fixed", inset:0, background:"rgba(43,32,24,0.55)", zIndex:60, display:"flex", alignItems:"flex-end", justifyContent:"center", backdropFilter:"blur(6px)" }} onClick={e => { if(e.target===e.currentTarget) onClose(); }}>
+      <div className="fade-up" style={{ background:C.bg, borderRadius:"24px 24px 0 0", width:"100%", maxWidth:480, maxHeight:"92vh", overflow:"auto", padding:"22px 20px 32px", boxShadow:"0 -8px 32px rgba(0,0,0,0.15)" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
           <div className="serif" style={{ fontSize:22, fontWeight:600, color:C.ink }}>{init ? "Edit Payment" : "Schedule Payment"}</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:C.inkSoft }}>×</button>
+        </div>
+
+        <div style={{ marginBottom:16 }}>
+          <label style={lbl}>Event{errors.event && <span style={{ color:C.red }}> *</span>}</label>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            {EVENTS.map(ev => {
+              const ec = eventColor(ev.id);
+              const sel = event === ev.id;
+              return (
+                <button key={ev.id} onClick={() => { setEvent(ev.id); if(errors.event) setErrors({...errors, event:null}); }} style={{ padding:"10px 10px", borderRadius:10, border:`2px solid ${sel ? ec.c : C.border}`, background: sel ? ec.bg : "white", color: sel ? ec.c : C.inkSoft, fontSize:12, fontWeight:600, cursor:"pointer", textAlign:"center", transition:"all 0.2s" }}>
+                  <div style={{ fontSize:16 }}>{ev.emoji}</div>
+                  <div style={{ marginTop:2 }}>{ev.label}</div>
+                </button>
+              );
+            })}
+          </div>
+          {errMsg(errors.event)}
         </div>
 
         <div style={{ display:"grid", gap:14 }}>
@@ -1322,17 +1607,15 @@ function PayModal({ cats, init, onSave, onClose }) {
           <div>
             <label style={lbl}>Type</label>
             <div style={{ display:"flex", gap:8 }}>
-              <button onClick={() => setShared(true)} style={{ flex:1, padding:10, borderRadius:10, border:`2px solid ${shared ? C.brand : C.border}`, background: shared ? C.brandBg : "white", color: shared ? C.brand : C.inkSoft, fontSize:13, fontWeight:700, cursor:"pointer" }}>🤝 Shared</button>
-              <button onClick={() => setShared(false)} style={{ flex:1, padding:10, borderRadius:10, border:`2px solid ${!shared ? C.brand : C.border}`, background: !shared ? C.brandBg : "white", color: !shared ? C.brand : C.inkSoft, fontSize:13, fontWeight:700, cursor:"pointer" }}>👤 Personal</button>
+              <button onClick={() => setShared(true)} style={{ flex:1, padding:10, borderRadius:10, border:`2px solid ${shared ? C.brand : C.border}`, background: shared ? C.brandBg : "white", color: shared ? C.brand : C.inkSoft, fontSize:13, fontWeight:700, cursor:"pointer", transition:"all 0.2s" }}>🤝 Shared</button>
+              <button onClick={() => setShared(false)} style={{ flex:1, padding:10, borderRadius:10, border:`2px solid ${!shared ? C.brand : C.border}`, background: !shared ? C.brandBg : "white", color: !shared ? C.brand : C.inkSoft, fontSize:13, fontWeight:700, cursor:"pointer", transition:"all 0.2s" }}>👤 Personal</button>
             </div>
           </div>
           <div>
             <label style={lbl}>Who Pays</label>
             <div style={{ display:"flex", gap:6 }}>
               {(shared ? ["Both","Bride","Groom"] : ["Bride","Groom"]).map(w => (
-                <button key={w} onClick={() => setWhoPays(w)} style={{ flex:1, padding:9, borderRadius:8, border:`2px solid ${whoPays===w ? C.brand : C.border}`, background: whoPays===w ? C.brandBg : "white", fontSize:12, fontWeight:600, cursor:"pointer", color: whoPays===w ? C.brand : C.inkSoft }}>
-                  {dn(w)}
-                </button>
+                <button key={w} onClick={() => setWhoPays(w)} style={{ flex:1, padding:9, borderRadius:8, border:`2px solid ${whoPays===w ? C.brand : C.border}`, background: whoPays===w ? C.brandBg : "white", fontSize:12, fontWeight:600, cursor:"pointer", color: whoPays===w ? C.brand : C.inkSoft, transition:"all 0.2s" }}>{dn(w)}</button>
               ))}
             </div>
           </div>
@@ -1358,13 +1641,12 @@ function SettingsModal({ budget, saveBudget, categories, saveCats, catS, showToa
   const [catInputs, setCatInputs] = useState({...categories});
   const [editMode, setEditMode] = useState(false);
   const allocated = Object.values(catInputs).reduce((a,b) => a+b, 0);
-  // Only sync from props when NOT editing — preserves user's in-progress edits
   useEffect(() => { if (!editMode) setCatInputs({...categories}); }, [categories, editMode]);
   useEffect(() => { setBudgetInput(budget.toString()); }, [budget]);
 
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(43,32,24,0.5)", zIndex:60, display:"flex", alignItems:"flex-end", justifyContent:"center", backdropFilter:"blur(4px)" }} onClick={e => { if(e.target===e.currentTarget) onClose(); }}>
-      <div className="fade-up" style={{ background:C.bg, borderRadius:"24px 24px 0 0", width:"100%", maxWidth:480, maxHeight:"92vh", overflow:"auto", padding:"22px 20px 32px" }}>
+    <div style={{ position:"fixed", inset:0, background:"rgba(43,32,24,0.55)", zIndex:60, display:"flex", alignItems:"flex-end", justifyContent:"center", backdropFilter:"blur(6px)" }} onClick={e => { if(e.target===e.currentTarget) onClose(); }}>
+      <div className="fade-up" style={{ background:C.bg, borderRadius:"24px 24px 0 0", width:"100%", maxWidth:480, maxHeight:"92vh", overflow:"auto", padding:"22px 20px 32px", boxShadow:"0 -8px 32px rgba(0,0,0,0.15)" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
           <div className="serif" style={{ fontSize:22, fontWeight:600, color:C.ink }}>Settings</div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:C.inkSoft }}>×</button>
@@ -1383,7 +1665,7 @@ function SettingsModal({ budget, saveBudget, categories, saveCats, catS, showToa
             <div style={{ fontSize:13, fontWeight:700, color:C.ink }}>Category Budgets</div>
             <button onClick={() => setEditMode(!editMode)} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, padding:"4px 12px", fontSize:12, color:C.inkSoft, cursor:"pointer", fontWeight:600 }}>{editMode ? "Done" : "Edit"}</button>
           </div>
-          <div style={{ fontSize:12, fontWeight:600, marginBottom:14, color: Math.abs(allocated-budget) > 100 ? C.red : C.sage }}>
+          <div style={{ fontSize:12, fontWeight:600, marginBottom:14, color: Math.abs(allocated-budget) > 100 ? C.red : C.green }}>
             Allocated: {fmtL(allocated)} / Budget: {fmtL(budget)}
             {Math.abs(allocated-budget) > 100 && ` (${fmtL(Math.abs(allocated-budget))} ${allocated>budget ? "over" : "under"})`}
           </div>
@@ -1402,14 +1684,14 @@ function SettingsModal({ budget, saveBudget, categories, saveCats, catS, showToa
                 </div>
                 {!editMode && (
                   <div style={{ height:5, background:C.borderLight, borderRadius:3, overflow:"hidden" }}>
-                    <div style={{ height:"100%", borderRadius:3, width:`${Math.min(p, 100)}%`, background: p>100 ? C.red : p>75 ? C.brand : C.sageSoft }} />
+                    <div style={{ height:"100%", borderRadius:3, width:`${Math.min(p, 100)}%`, background: p>100 ? C.red : p>75 ? C.brand : C.greenSoft, transition:"width 0.5s" }} />
                   </div>
                 )}
               </div>
             );
           })}
           {editMode && (
-            <button onClick={() => { saveCats(catInputs); setEditMode(false); showToast("Categories saved ✓"); }} style={{ width:"100%", padding:12, marginTop:8, background:`linear-gradient(135deg, ${C.sage}, ${C.sageSoft})`, color:"white", border:"none", borderRadius:10, fontWeight:700, cursor:"pointer" }}>
+            <button onClick={() => { saveCats(catInputs); setEditMode(false); showToast("Categories saved ✓"); }} style={{ width:"100%", padding:12, marginTop:8, background:`linear-gradient(135deg, ${C.green}, ${C.greenSoft})`, color:"white", border:"none", borderRadius:10, fontWeight:700, cursor:"pointer" }}>
               Save Category Budgets
             </button>
           )}
